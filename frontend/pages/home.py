@@ -5,7 +5,7 @@ from frontend.components.navbar import navbar
 
 @ui.page('/')
 def home_page() -> None:
-    """Render the Routely landing page."""
+    """Render the landing page."""
     navbar()
 
     with ui.column().classes(
@@ -33,12 +33,12 @@ def home_page() -> None:
             ).props('flat')
 
         with ui.column().classes('hero-card items-center justify-center mt-10'):
-            ui.icon('explore').classes(
-                'text-4xl text-amber-500 bg-amber-50 rounded-full p-4'
-            )
-            ui.label('Plan Your Route').classes(
-                'serif text-xl font-bold mt-4'
-            )
-            ui.label('Map coming soon.').classes(
-                'text-gray-400 text-sm mt-2'
-            )
+            options = {
+                'zoomControl': False,
+                'scrollWheelZoom': False,
+                'doubleClickZoom': False,
+                'boxZoom': False,
+                'keyboard': False,
+                'dragging': False,
+            }
+            m = ui.leaflet(center=(33.782, -118.112), zoom=14, options=options)

@@ -1,11 +1,10 @@
 ﻿from nicegui import ui
 
-
 from frontend.components.navbar import navbar
 
 
 @ui.page('/register')
-def register_page():
+def register_page() -> None:
     navbar()
 
     with ui.card().classes('w-full max-w-md mx-auto mt-16 p-8'):
