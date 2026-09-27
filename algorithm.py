@@ -25,19 +25,30 @@ parking_plan = [
     },
     {
         "student_id": 2,
-                "day": "Monday",
-                "lot_id": "G3",
-                "arrival": time(9, 0),
-                "departure": time(14,0)
+        "day": "Monday",
+        "lot_id": "G3",
+        "arrival": time(9, 0),
+        "departure": time(14,0)
     },
     {
         "student_id": 3,
-                "day": "Monday",
-                "lot_id": "G3",
-                "arrival": time(16, 0),
-                "departure": time(18,0)
+        "day": "Monday",
+        "lot_id": "G3",
+        "arrival": time(16, 0),
+        "departure": time(18,0)
     }
 ]
+
+# Responsible for seeing what percentage of students are going to pack that this parking lot/structure
+def calculate_lot_demand(plans, lot_id, day, target, lot_capacity):
+    assumption_count = 0
+
+    for plan in plans:
+        if lot_id == plan["lot_id"] and day == plan["day"]:
+            if plan["arrival"] <= target < plan["departure"]:
+                assumption_count += 1
+
+    return assumption_count / lot_capacity
 
 
 # Responsible for seeing what percentage of students are expected to be parked at this time
@@ -65,3 +76,6 @@ demand = calculate_schedule_demand(schedules, target_time)
 # %M — minutes
 # %p — AM or PM
 print(f"Estimate {target_time.strftime("%I:%M %p")} to be {classify_demand(demand)}")
+
+lot_demand = calculate_lot_demand(parking_plan, "G3", "Monday", target_time, 5)
+print(f"Estimate {target_time.strftime("%I:%M %p")} at lot G3 on a Monday to be {classify_demand(lot_demand)}")
