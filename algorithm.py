@@ -36,8 +36,47 @@ parking_plan = [
         "lot_id": "G3",
         "arrival": time(16, 0),
         "departure": time(18,0)
+    },
+    {
+        "student_id": 4,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(16, 0),
+        "departure": time(18,0)
+    },
+    {
+        "student_id": 7,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(8, 0),
+        "departure": time(12, 0)
+    },
+    {
+        "student_id": 8,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(9, 30),
+        "departure": time(15, 0)
+    },
+    {
+        "student_id": 9,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(11, 0),
+        "departure": time(14, 0)
     }
 ]
+
+# These are just mock walk times to test
+walk_times = {
+    "G3": 5,
+    "G4": 8
+}
+
+# gives a score to a parking lot. Each minute is a 1 point. Lowest point means less walk time meaning better score
+def calculate_recommendation_score(walk_time, predicted_demand, demand_penalty = 8): # the demand penatly means the "busy-ness" can add up to 8 minutes of walking
+    score = walk_time + (predicted_demand * demand_penalty)
+    return score
 
 # Responsible for seeing what percentage of students are going to pack that this parking lot/structure
 def calculate_lot_demand(plans, lot_id, day, target, lot_capacity):
@@ -79,3 +118,11 @@ print(f"Estimate {target_time.strftime("%I:%M %p")} to be {classify_demand(deman
 
 lot_demand = calculate_lot_demand(parking_plan, "G3", "Monday", target_time, 5)
 print(f"Estimate {target_time.strftime("%I:%M %p")} at lot G3 on a Monday to be {classify_demand(lot_demand)}")
+
+#block of code here is to calculate score for lot G3 and G4
+scores = []
+for lot_id, walking_minutes in walk_times.items():
+    curr_demand = calculate_lot_demand(parking_plan, lot_id, "Monday", target_time, 10)
+    curr_score = calculate_recommendation_score(walking_minutes, curr_demand)
+    scores.append((lot_id, curr_score))
+print(scores)
