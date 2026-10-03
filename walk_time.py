@@ -11,7 +11,7 @@ import requests
 
 
 # My API key for OpenRouteService (ORS) - you should replace this with your own key.
-API_KEY =  "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI3ZTk3MGFlNzdkZDQ3ZTliMGJlNjBjYTRmZTcyMWM4IiwiaCI6Im11cm11cjY0In0=" # <-- put your real OpenRouteService key here
+API_KEY =  "" # <-- put your real OpenRouteService key here
 ORS_MATRIX_URL = "https://api.heigit.org/openrouteservice/v2/matrix/foot-walking"
 
 import os
