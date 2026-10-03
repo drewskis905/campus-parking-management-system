@@ -125,9 +125,9 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
 
 
 
-# ---------------------------------------------------------------------
-# QUICK MANUAL TEST (only runs if you execute this file directly)
-# ---------------------------------------------------------------------
+
+#  MANUAL TEST (only runs if you execute this file directly)
+
 
 if __name__ == "__main__":
     test_scores = get_lot_recommendations(
