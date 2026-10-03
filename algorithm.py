@@ -1,4 +1,7 @@
 from datetime import time
+from database.database import get_all
+from walk_time import load_lots
+from walk_time import score_all_lots
 
 # the records of class schedule of each student stored as a list of dictionaries
 schedules = [
@@ -67,11 +70,15 @@ parking_plan = [
     }
 ]
 
+
 # These are just mock walk times to test
 walk_times = {
     "G3": 5,
     "G4": 8
 }
+
+# gives me a list of tuples of (lot name, capaicty), called from database
+lots = get_all("lots", "name", "capacity")
 
 # gives a score to a parking lot. Each minute is a 1 point. Lowest point means less walk time meaning better score
 def calculate_recommendation_score(walk_time, predicted_demand, demand_penalty = 8): # the demand penatly means the "busy-ness" can add up to 8 minutes of walking
