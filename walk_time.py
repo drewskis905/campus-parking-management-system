@@ -11,11 +11,14 @@ import requests
 
 
 # My API key for OpenRouteService (ORS) - you should replace this with your own key.
-API_KEY =  "<your api key>" # <-- put your real OpenRouteService key here
+API_KEY =  "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjI3ZTk3MGFlNzdkZDQ3ZTliMGJlNjBjYTRmZTcyMWM4IiwiaCI6Im11cm11cjY0In0=" # <-- put your real OpenRouteService key here
 ORS_MATRIX_URL = "https://api.heigit.org/openrouteservice/v2/matrix/foot-walking"
 
-LOTS_FILE = "lots.json" # our lots file
-BUILDINGS_FILE = "buildings.json" # our buildings file
+import os
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+LOTS_FILE = os.path.join(SCRIPT_DIR, "database", "data", "lots.json")
+BUILDINGS_FILE = os.path.join(SCRIPT_DIR, "database", "data", "buildings.json")
 
 
 
