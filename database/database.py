@@ -1,6 +1,9 @@
 import sqlite3
 import json
 import os
+import bcrypt
+from datetime import datetime
+from enum import Enum
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -8,6 +11,20 @@ DATABASE = os.path.join(BASE_DIR, "parking.db")
 
 LOTS_FILE = os.path.join(BASE_DIR, "data", "lots.json")
 BUILDINGS_FILE = os.path.join(BASE_DIR, "data", "buildings.json")
+
+# Days that can be used for a class schedule
+class ClassDay(Enum):
+    MONDAY = "Monday"
+    TUESDAY = "Tuesday"
+    WEDNESDAY = "Wednesday"
+    THURSDAY = "Thursday"
+    FRIDAY = "Friday"
+    SATURDAY = "Saturday"
+    SUNDAY = "Sunday"
+
+# Check if the class day is valid
+def validate_class_day(day):
+    return day in [class_day.value for class_day in ClassDay]
 
 
 # Connect to the database
@@ -41,8 +58,10 @@ def create_tables():
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL
         )
     """)
 
@@ -50,12 +69,25 @@ def create_tables():
         CREATE TABLE IF NOT EXISTS schedules(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
+            class_name TEXT NOT NULL,
             building TEXT NOT NULL,
             day TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL
         )
     """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS parking_plans(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            lot TEXT NOT NULL,
+            day TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -229,16 +261,43 @@ def get_all(table, *columns):
     return rows
 
 # Add a new registered user
-def add_user(name, email):
+def add_user(first_name, last_name, email, password):
     conn = get_connection()
 
-    conn.execute("""
-        INSERT INTO users (name, email)
-        VALUES (?, ?)
-    """, (name, email))
+    try:
+        # Hash the password before storing it
+        password_hash = bcrypt.hashpw(
+            password.encode("utf-8"),
+            bcrypt.gensalt()
+        ).decode("utf-8")
 
-    conn.commit()
-    conn.close()
+        conn.execute("""
+            INSERT INTO users
+            (first_name, last_name, email, password_hash)
+            VALUES (?, ?, ?, ?)
+        """, (first_name, last_name, email, password_hash))
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "User added successfully."
+        }
+
+    except sqlite3.IntegrityError as error:
+        return {
+            "success": False,
+            "message": f"Could not add user: {error}"
+        }
+
+    except sqlite3.Error as error:
+        return {
+            "success": False,
+            "message": f"Database error: {error}"
+        }
+
+    finally:
+        conn.close()
 
 # Check if a user is already registered
 def is_registered(email):
@@ -273,6 +332,51 @@ def get_user_id(email):
 
     return None
 
+def verify_password(email, password):
+    conn = get_connection()
+
+    try:
+        # Get the stored password hash for this email
+        cursor = conn.execute("""
+            SELECT password_hash FROM users
+            WHERE email = ?
+        """, (email,))
+
+        user = cursor.fetchone()
+
+        # No account was found with this email
+        if user is None:
+            return {
+                "success": False,
+                "message": "Invalid email or password."
+            }
+
+        stored_hash = user[0]
+
+        # Check the entered password against the stored hash
+        if bcrypt.checkpw(
+            password.encode("utf-8"),
+            stored_hash.encode("utf-8")
+        ):
+            return {
+                "success": True,
+                "message": "Password is correct."
+            }
+
+        return {
+            "success": False,
+            "message": "Invalid email or password."
+        }
+
+    except sqlite3.Error as error:
+        return {
+            "success": False,
+            "message": f"Database error: {error}"
+        }
+
+    finally:
+        conn.close()
+
 # Delete a registered user
 def delete_user(email):
     conn = get_connection()
@@ -297,17 +401,68 @@ def delete_user_schedule(user_id):
     conn.commit()
     conn.close()
 
+# Check that the start and end times are valid
+def validate_time(start_time, end_time):
+    try:
+        start = datetime.strptime(start_time, "%H:%M")
+        end = datetime.strptime(end_time, "%H:%M")
+
+        return start < end
+
+    except ValueError:
+        return False
+
+# Convert stored time to AM/PM for displaying
+def format_time(time_string):
+    time = datetime.strptime(time_string, "%H:%M")
+    return time.strftime("%I:%M %p").lstrip("0")
+
 # Add a class to a user's schedule
-def add_schedule(user_id, building, day, start_time, end_time):
+def add_schedule(user_id, class_name, building, day, start_time, end_time):
+    if not class_name or not class_name.strip():
+        return {
+            "success": False,
+            "message": "Could not add schedule: class name cannot be empty."
+        }
+
+    # Make sure the class day is valid
+    if not validate_class_day(day):
+        return {
+            "success": False,
+            "message": "Could not add schedule: invalid class day."
+        }
+
+    # Check the times before adding the schedule
+    if not validate_time(start_time, end_time):
+        return {
+            "success": False,
+            "message": "Could not add schedule: invalid start or end time."
+        }
+
     conn = get_connection()
 
-    conn.execute("""
-        INSERT INTO schedules (user_id, building, day, start_time, end_time)
-        VALUES (?, ?, ?, ?, ?)
-    """, (user_id, building, day, start_time, end_time))
+    try:
+        conn.execute("""
+            INSERT INTO schedules
+            (user_id, class_name, building, day, start_time, end_time)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, class_name, building, day, start_time, end_time))
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "Schedule added successfully."
+        }
+
+    except sqlite3.Error as error:
+        return {
+            "success": False,
+            "message": f"Could not add schedule: {error}"
+        }
+
+    finally:
+        conn.close()
 
 # Get all classes for a specific user
 def get_user_schedule(user_id):
@@ -377,6 +532,116 @@ def delete_building(name):
 
     conn.commit()
     conn.close()
+
+
+# Add a parking plan for a user
+def add_parking_plan(user_id, lot, day, start_time, end_time):
+    # Make sure the parking plan day is valid
+    if not validate_class_day(day):
+        return {
+            "success": False,
+            "message": "Could not add parking plan: invalid day."
+        }
+
+    # Check the times before adding the parking plan
+    if not validate_time(start_time, end_time):
+        return {
+            "success": False,
+            "message": "Could not add parking plan: invalid start or end time."
+        }
+
+    conn = get_connection()
+
+    try:
+        conn.execute("""
+            INSERT INTO parking_plans
+            (user_id, lot, day, start_time, end_time)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, lot, day, start_time, end_time))
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "Parking plan added successfully."
+        }
+
+    except sqlite3.Error as error:
+        return {
+            "success": False,
+            "message": f"Could not add parking plan: {error}"
+        }
+
+    finally:
+        conn.close()
+
+# Get all parking plans for a specific user
+def get_user_parking_plans(user_id):
+    conn = get_connection()
+
+    cursor = conn.execute("""
+        SELECT * FROM parking_plans
+        WHERE user_id = ?
+    """, (user_id,))
+
+    plans = cursor.fetchall()
+
+    conn.close()
+
+    return plans
+
+# Delete one specific parking plan
+def delete_parking_plan(plan_id):
+    conn = get_connection()
+
+    conn.execute("""
+        DELETE FROM parking_plans
+        WHERE id = ?
+    """, (plan_id,))
+
+    conn.commit()
+    conn.close()
+
+# Update a specific parking plan
+def update_parking_plan(plan_id, lot, day, start_time, end_time):
+    # Make sure the parking plan day is valid
+    if not validate_class_day(day):
+        return {
+            "success": False,
+            "message": "Could not update parking plan: invalid day."
+        }
+
+    # Check the times before updating the parking plan
+    if not validate_time(start_time, end_time):
+        return {
+            "success": False,
+            "message": "Could not update parking plan: invalid start or end time."
+        }
+
+    conn = get_connection()
+
+    try:
+        conn.execute("""
+            UPDATE parking_plans
+            SET lot = ?, day = ?, start_time = ?, end_time = ?
+            WHERE id = ?
+        """, (lot, day, start_time, end_time, plan_id))
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "Parking plan updated successfully."
+        }
+
+    except sqlite3.Error as error:
+        return {
+            "success": False,
+            "message": f"Could not update parking plan: {error}"
+        }
+
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
