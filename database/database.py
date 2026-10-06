@@ -444,7 +444,7 @@ def validate_time(start_time, end_time):
         earliest_time = datetime.strptime("07:00", "%H:%M")
 
         # Latest allowed time is 9:00 PM
-        latest_time = datetime.strptime("21:00", "%H:%M")
+        latest_time = datetime.strptime("23:00", "%H:%M")
 
         # Make sure the times are within the allowed range
         if start < earliest_time or end > latest_time:
