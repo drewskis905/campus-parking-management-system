@@ -4,6 +4,62 @@ from walk_time import score_all_lots
 
 from fake_database import get_all_parking_plans, get_lot
 
+parking_plan = [
+
+        {
+        "student_id": 1,
+        "day": "Monday",
+        "lot_id": "G3",
+        "arrival": time(9, 0),
+        "departure": time(14,0)
+    },
+    {
+        "student_id": 2,
+        "day": "Monday",
+        "lot_id": "G3",
+        "arrival": time(9, 0),
+        "departure": time(14,0)
+    },
+    {
+        "student_id": 3,
+        "day": "Monday",
+        "lot_id": "G3",
+        "arrival": time(16, 0),
+        "departure": time(18,0)
+    },
+    {
+        "student_id": 4,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(16, 0),
+        "departure": time(18,0)
+    },
+    {
+        "student_id": 7,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(8, 0),
+        "departure": time(12, 0)
+    },
+    {
+        "student_id": 8,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(9, 30),
+        "departure": time(15, 0)
+    },
+    {
+        "student_id": 9,
+        "day": "Monday",
+        "lot_id": "G4",
+        "arrival": time(11, 0),
+        "departure": time(14, 0)
+    }
+
+
+]
+
+
 def _parse_time(time_str):
     """Converts a stored 'HH:MM' string back into a datetime.time object."""
     return datetime.strptime(time_str, "%H:%M").time()
@@ -16,8 +72,17 @@ def calculate_recommendation_score(walk_time, predicted_demand, demand_penalty=8
     score = walk_time + (predicted_demand * demand_penalty)
     return score
 
+def calculate_lot_demand(plans, lot_id, day, target, lot_capacity):
+    assumption_count = 0
 
-def calculate_lot_demand(lot_id, day, window_start, window_end, lot_capacity):
+    for plan in plans:
+        if lot_id == plan["lot_id"] and day == plan["day"]:
+            if plan["arrival"] <= target < plan["departure"]:
+                assumption_count += 1
+
+    return assumption_count / lot_capacity
+
+def calculate_lot_ovelap(lot_id, day, window_start, window_end):
     """
     Estimates how busy a lot will be during the given window.
 
@@ -45,8 +110,7 @@ def calculate_lot_demand(lot_id, day, window_start, window_end, lot_capacity):
                 overlap_end = min(row_departure, window_end)
                 overlaps.append((overlap_start, overlap_end))
 
-    demand = assumption_count / lot_capacity
-    return demand, overlaps
+    return overlaps
 
 
 def classify_demand(demand):
@@ -100,8 +164,8 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
         lot_info = get_lot(lot_id)  # (id, name, lat, lng, capacity)
         real_capacity = lot_info[4] if lot_info else 10
  
-        curr_demand, overlaps = calculate_lot_demand(
-            lot_id, day, arrival_time, departure_time, real_capacity
+        curr_demand = calculate_lot_demand(
+            parking_plan, lot_id, day, arrival_time, real_capacity
         )
         curr_score = calculate_recommendation_score(walking_minutes, curr_demand)
  
@@ -116,8 +180,7 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
             "walk_from": r["walk_from"],
             "remaining_spots": remaining_spots,
             "percent_full": percent_full,
-            "overlaps": overlaps,
-            "summary": summarize_overlaps(overlaps)
+    
         })
  
     scores.sort(key=lambda s: s["score"])
@@ -146,4 +209,4 @@ if __name__ == "__main__":
                   f"walk to class={s['walk_to']:.1f} min, "
                   f"walk back={s['walk_from']:.1f} min, "
                   f"{s['remaining_spots']} spots available, "
-                  f"{s['percent_full']}% full - {s['summary']}")
+                  f"{s['percent_full']}% full")
