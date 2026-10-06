@@ -9,7 +9,11 @@ USERS
 =====
 
 add_user(first_name, last_name, email, password)
-- Creates a new user account and hashes the password before storing it.
+- Creates a new user account.
+- Checks that all required fields are filled in.
+- Shows which field(s) are empty if any are missing.
+- Hashes the password before storing it in the database.
+- Returns a success/failure message.
 
 is_registered(email)
 - Checks whether an email is already registered.
@@ -29,7 +33,12 @@ SCHEDULES
 
 add_schedule(user_id, class_name, building, day, start_time, end_time)
 - Adds a class to a user's schedule.
-- Checks the class name, day, and times before adding it.
+- Checks that all required fields are filled in.
+- Shows which field(s) are empty if any are missing.
+- Supports multiple class days such as Monday/Friday.
+- Validates the class days and times before saving.
+- Prevents the same user from adding the same class more than once.
+- Returns a success/failure message.
 
 get_user_schedule(user_id)
 - Gets all classes saved for a specific user.
@@ -43,7 +52,10 @@ PARKING PLANS
 
 add_parking_plan(user_id, lot, day, start_time, end_time)
 - Adds a parking plan for a user.
-- Checks the day and times before adding it.
+- Checks that all required fields are filled in.
+- Shows which field(s) are empty if any are missing.
+- Validates the day and times before saving.
+- Returns a success/failure message.
 
 get_user_parking_plans(user_id)
 - Gets all parking plans belonging to a specific user.
@@ -59,11 +71,15 @@ TIME / VALIDATION
 =================
 
 validate_class_day(day)
-- Checks whether the day is a valid day of the week.
+- Checks that the class day or days are valid.
+- Supports multiple days separated by "/".
+- Example: Monday/Friday or Monday/Wednesday/Friday.
 
 validate_time(start_time, end_time)
-- Checks whether the start and end times are valid.
+- Checks that the start and end times are valid.
 - Makes sure the start time comes before the end time.
+- Only allows times between 7:00 AM and 9:00 PM.
+- Used for schedules and parking plans.
 
 format_time(time_string)
 - Converts a stored 24-hour time to AM/PM for displaying it.

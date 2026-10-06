@@ -24,7 +24,15 @@ class ClassDay(Enum):
 
 # Check if the class day is valid
 def validate_class_day(day):
-    return day in [class_day.value for class_day in ClassDay]
+    days = day.split("/")
+
+    valid_days = [class_day.value for class_day in ClassDay]
+
+    for class_day in days:
+        if class_day.strip() not in valid_days:
+            return False
+
+    return True
 
 
 # Connect to the database
@@ -262,6 +270,27 @@ def get_all(table, *columns):
 
 # Add a new registered user
 def add_user(first_name, last_name, email, password):
+    # Check for any empty fields
+    empty_fields = []
+
+    if not first_name or not first_name.strip():
+        empty_fields.append("first_name")
+
+    if not last_name or not last_name.strip():
+        empty_fields.append("last_name")
+
+    if not email or not email.strip():
+        empty_fields.append("email")
+
+    if not password or not password.strip():
+        empty_fields.append("password")
+
+    # If any fields are empty, don't add the user
+    if empty_fields:
+        return {
+            "success": False,
+            "message": f"Could not add user: empty field(s): {', '.join(empty_fields)}."
+        }
     conn = get_connection()
 
     try:
@@ -407,7 +436,21 @@ def validate_time(start_time, end_time):
         start = datetime.strptime(start_time, "%H:%M")
         end = datetime.strptime(end_time, "%H:%M")
 
-        return start < end
+        # Make sure the end time is after the start time
+        if start >= end:
+            return False
+
+        # Earliest allowed time is 7:00 AM
+        earliest_time = datetime.strptime("07:00", "%H:%M")
+
+        # Latest allowed time is 9:00 PM
+        latest_time = datetime.strptime("21:00", "%H:%M")
+
+        # Make sure the times are within the allowed range
+        if start < earliest_time or end > latest_time:
+            return False
+
+        return True
 
     except ValueError:
         return False
@@ -419,10 +462,33 @@ def format_time(time_string):
 
 # Add a class to a user's schedule
 def add_schedule(user_id, class_name, building, day, start_time, end_time):
+
+    # Check for any empty fields
+    empty_fields = []
+
+    if user_id is None:
+        empty_fields.append("user_id")
+
     if not class_name or not class_name.strip():
+        empty_fields.append("class_name")
+
+    if not building or not building.strip():
+        empty_fields.append("building")
+
+    if not day or not day.strip():
+        empty_fields.append("day")
+
+    if not start_time or not start_time.strip():
+        empty_fields.append("start_time")
+
+    if not end_time or not end_time.strip():
+        empty_fields.append("end_time")
+
+    # If any fields are empty, don't add the schedule
+    if empty_fields:
         return {
             "success": False,
-            "message": "Could not add schedule: class name cannot be empty."
+            "message": f"Could not add schedule: empty field(s): {', '.join(empty_fields)}."
         }
 
     # Make sure the class day is valid
@@ -442,6 +508,20 @@ def add_schedule(user_id, class_name, building, day, start_time, end_time):
     conn = get_connection()
 
     try:
+        # Check if this class is already in the user's schedule
+        cursor = conn.execute("""
+            SELECT id FROM schedules
+            WHERE user_id = ?
+            AND class_name = ?
+        """, (user_id, class_name))
+
+        existing_schedule = cursor.fetchone()
+
+        if existing_schedule:
+            return {
+                "success": False,
+                "message": "Could not add schedule: this class is already in the user's schedule."
+            }
         conn.execute("""
             INSERT INTO schedules
             (user_id, class_name, building, day, start_time, end_time)
@@ -536,6 +616,30 @@ def delete_building(name):
 
 # Add a parking plan for a user
 def add_parking_plan(user_id, lot, day, start_time, end_time):
+    # Check for any empty fields
+    empty_fields = []
+
+    if user_id is None:
+        empty_fields.append("user_id")
+
+    if not lot or not lot.strip():
+        empty_fields.append("lot")
+
+    if not day or not day.strip():
+        empty_fields.append("day")
+
+    if not start_time or not start_time.strip():
+        empty_fields.append("start_time")
+
+    if not end_time or not end_time.strip():
+        empty_fields.append("end_time")
+
+    # If any fields are empty, don't add the parking plan
+    if empty_fields:
+        return {
+            "success": False,
+            "message": f"Could not add parking plan: empty field(s): {', '.join(empty_fields)}."
+        }
     # Make sure the parking plan day is valid
     if not validate_class_day(day):
         return {
