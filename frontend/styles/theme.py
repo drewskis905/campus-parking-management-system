@@ -90,6 +90,73 @@ GLOBAL_CSS = '''
         box-shadow: 0 18px 40px rgba(40, 40, 30, 0.10);
     }
 
+    .auth-dialog-card {
+        width: min(1100px, 96vw);
+        max-width: none;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .class-schedule-row {
+        display: grid;
+        grid-template-columns: minmax(130px, 1.2fr) minmax(140px, 1.1fr)
+            minmax(235px, 1.5fr) minmax(115px, 1fr)
+            minmax(115px, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        width: 100%;
+        padding: 16px;
+        border: 1px solid #e6e6df;
+        border-radius: 16px;
+    }
+
+    .weekday-selector {
+        display: inline-flex;
+        flex-wrap: nowrap;
+        gap: 0;
+        width: max-content;
+        max-width: 100%;
+        overflow: hidden;
+        border-radius: 4px;
+        border: 1px solid #d7d7d2;
+        background: white;
+    }
+
+    .weekday-selector .weekday-button {
+        min-width: 36px;
+        min-height: 36px;
+        padding: 0 7px;
+        border-radius: 0;
+        background: white;
+        color: #1d1d1b;
+    }
+
+    .weekday-selector .weekday-button + .weekday-button {
+        border-left: 1px solid #d7d7d2;
+    }
+
+    .weekday-selector .weekday-button--selected {
+        background: #ffad00;
+        color: #1d1d1b;
+    }
+
+    .weekday-selector .weekday-button:focus-visible {
+        outline: 2px solid #1d1d1b;
+        outline-offset: -2px;
+    }
+
+    @media (max-width: 1000px) {
+        .class-schedule-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 600px) {
+        .class-schedule-row {
+            grid-template-columns: minmax(0, 1fr);
+        }
+    }
+
     @media (max-width: 700px) {
         .nav-links {
             display: none;
