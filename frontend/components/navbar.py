@@ -1,8 +1,13 @@
+from collections.abc import Callable
+
 from nicegui import ui
 
+from frontend.components.auth_dialog import auth_dialog
 
-def navbar() -> None:
+
+def navbar() -> Callable[[str], None]:
     """Render the shared site navigation."""
+    open_auth = auth_dialog()
     with ui.row().classes(
         'site-header w-full items-center justify-between px-4 md:px-8 py-4 '
         'border-b border-gray-100'
@@ -18,5 +23,7 @@ def navbar() -> None:
 
         ui.button(
             'Log In / Register',
-            on_click=lambda: ui.navigate.to('/register'),
+            on_click=lambda: open_auth('Log In'),
         ).classes('yellow-button').props('unelevated')
+
+    return open_auth

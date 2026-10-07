@@ -1,0 +1,143 @@
+DATABASE FUNCTION REFERENCE
+===========================
+
+This file is a quick reference for the functions available in database.py.
+Search the function name in database.py to find the actual code.
+
+
+USERS
+=====
+
+add_user(first_name, last_name, email, password)
+- Creates a new user account.
+- Checks that all required fields are filled in.
+- Shows which field(s) are empty if any are missing.
+- Hashes the password before storing it in the database.
+- Returns a success/failure message.
+
+is_registered(email)
+- Checks whether an email is already registered.
+
+get_user_id(email)
+- Gets a user's ID using their email.
+
+verify_password(email, password)
+- Checks whether the password entered matches the user's stored password.
+
+delete_user(email)
+- Deletes a user account using their email.
+
+
+SCHEDULES
+=========
+
+add_schedule(user_id, class_name, building, day, start_time, end_time)
+- Adds a class to a user's schedule.
+- Checks that all required fields are filled in.
+- Shows which field(s) are empty if any are missing.
+- Supports multiple class days such as Monday/Friday.
+- Validates the class days and times before saving.
+- Prevents the same user from adding the same class more than once.
+- Returns a success/failure message.
+
+get_user_schedule(user_id)
+- Gets all classes saved for a specific user.
+
+delete_user_schedule(user_id)
+- Deletes all schedule entries for a specific user.
+
+
+PARKING PLANS
+=============
+
+add_parking_plan(user_id, lot, day, start_time, end_time)
+- Adds a parking plan for a user.
+- Checks that all required fields are filled in.
+- Shows which field(s) are empty if any are missing.
+- Validates the day and times before saving.
+- Returns a success/failure message.
+
+get_user_parking_plans(user_id)
+- Gets all parking plans belonging to a specific user.
+
+update_parking_plan(plan_id, lot, day, start_time, end_time)
+- Updates an existing parking plan using its ID.
+
+delete_parking_plan(plan_id)
+- Deletes one specific parking plan using its ID.
+
+
+TIME / VALIDATION
+=================
+
+validate_class_day(day)
+- Checks that the class day or days are valid.
+- Supports multiple days separated by "/".
+- Example: Monday/Friday or Monday/Wednesday/Friday.
+
+validate_time(start_time, end_time)
+- Checks that the start and end times are valid.
+- Makes sure the start time comes before the end time.
+- Only allows times between 7:00 AM and 9:00 PM.
+- Used for schedules and parking plans.
+
+format_time(time_string)
+- Converts a stored 24-hour time to AM/PM for displaying it.
+
+
+PARKING LOTS
+============
+
+get_all_lots()
+- Gets all parking lots from the database.
+
+get_lot(name)
+- Gets one parking lot using its name.
+
+add_lot(name, lat, lng, capacity=None)
+- Adds a new parking lot.
+
+update_lot_capacity(name, capacity)
+- Changes the capacity of an existing parking lot.
+
+delete_lot(name)
+- Deletes a parking lot using its name.
+
+
+BUILDINGS
+=========
+
+get_all_buildings()
+- Gets all buildings from the database.
+
+get_building(name)
+- Gets one building using its name.
+
+add_building(name, lat, lng)
+- Adds a new building.
+
+update_building(name, lat, lng)
+- Updates the coordinates of a building.
+
+delete_building(name)
+- Deletes a building using its name.
+
+
+DATABASE / DATA
+===============
+
+get_connection()
+- Opens a connection to parking.db.
+
+create_tables()
+- Creates the database tables if they do not already exist.
+
+load_lots()
+- Loads parking lot information from lots.json into the database.
+
+load_buildings()
+- Loads building information from buildings.json into the database.
+
+get_all(table, *columns)
+- Gets selected columns from the lots or buildings table.
+- Can return one column or multiple columns.

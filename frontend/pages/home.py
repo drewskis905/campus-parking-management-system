@@ -2,11 +2,12 @@ from nicegui import ui
 
 from frontend.components.navbar import navbar
 
+from database import database
 
 @ui.page('/')
 def home_page() -> None:
     """Render the landing page."""
-    navbar()
+    open_auth = navbar()
 
     with ui.column().classes(
         'home-hero w-full items-center text-center px-6 pt-24 pb-20'
@@ -26,7 +27,7 @@ def home_page() -> None:
         with ui.row().classes('items-center gap-3 mt-7'):
             ui.button(
                 '→  Get started.',
-                on_click=lambda: ui.navigate.to('/register'),
+                on_click=lambda: open_auth('Register'),
             ).classes('yellow-button').props('unelevated')
             ui.button('See How It Works').classes(
                 'outline-button bg-white/70'
@@ -41,4 +42,6 @@ def home_page() -> None:
                 'keyboard': False,
                 'dragging': False,
             }
-            m = ui.leaflet(center=(33.782, -118.112), zoom=14, options=options)
+            CSULB_LAT = 33.782
+            CSULB_LNG = -118.112
+            m = ui.leaflet(center=(CSULB_LAT, CSULB_LNG), zoom=14, options=options)
