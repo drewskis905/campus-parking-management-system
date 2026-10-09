@@ -52,7 +52,7 @@ for first_name, email, class_start, class_end, arrival, departure in fake_studen
             user_id,
             "TEST 101",
             building,
-            "Monday",
+            "Monday/Friday",
             class_start,
             class_end
         )
