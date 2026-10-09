@@ -34,14 +34,28 @@ SCHEDULES
 add_schedule(user_id, class_name, building, day, start_time, end_time)
 - Adds a class to a user's schedule.
 - Checks that all required fields are filled in.
-- Shows which field(s) are empty if any are missing.
-- Supports multiple class days such as Monday/Friday.
+- Shows which fields are empty if any are missing.
+- Supports multiple class days such as Monday/Wednesday.
 - Validates the class days and times before saving.
 - Prevents the same user from adding the same class more than once.
-- Returns a success/failure message.
+- Prevents classes from overlapping on the same day and time.
+- Returns a success or failure message.
 
 get_user_schedule(user_id)
 - Gets all classes saved for a specific user.
+
+check_schedule_overlap(user_id, day, start_time, end_time)
+- Checks if a new class overlaps with an existing class.
+- Checks both the class days and times.
+- Supports classes with multiple days such as Monday/Wednesday.
+- Returns the name of the overlapping class if a conflict is found.
+- Returns None if there is no overlap.
+
+get_user_schedule_by_day(user_id, day)
+- Gets a user's classes for a specific day.
+- Supports classes that meet on multiple days.
+- Returns the classes sorted by start time, earliest to latest.
+- Returns a message if no classes are found for that day.
 
 delete_user_schedule(user_id)
 - Deletes all schedule entries for a specific user.
