@@ -460,6 +460,39 @@ def format_time(time_string):
     time = datetime.strptime(time_string, "%H:%M")
     return time.strftime("%I:%M %p").lstrip("0")
 
+
+# Check if a new class overlaps with an existing class
+def check_schedule_overlap(user_id, day, start_time, end_time):
+    conn = get_connection()
+
+    cursor = conn.execute("""
+        SELECT class_name, day, start_time, end_time
+        FROM schedules
+        WHERE user_id = ?
+    """, (user_id,))
+
+    existing_classes = cursor.fetchall()
+    conn.close()
+
+    # Get the days for the new class
+    new_days = set(d.strip() for d in day.split("/"))
+
+    for class_name, existing_day, existing_start, existing_end in existing_classes:
+
+        # Get the days for the existing class
+        existing_days = set(d.strip() for d in existing_day.split("/"))
+
+        # Check if they share at least one day
+        same_day = bool(new_days & existing_days)
+
+        # Check if their times overlap
+        same_time = start_time < existing_end and end_time > existing_start
+
+        if same_day and same_time:
+            return class_name
+
+    return None
+
 # Add a class to a user's schedule
 def add_schedule(user_id, class_name, building, day, start_time, end_time):
 
@@ -522,6 +555,19 @@ def add_schedule(user_id, class_name, building, day, start_time, end_time):
                 "success": False,
                 "message": "Could not add schedule: this class is already in the user's schedule."
             }
+        # Check if the new class overlaps with an existing class
+        overlapping_class = check_schedule_overlap(
+            user_id,
+            day,
+            start_time,
+            end_time
+        )
+
+        if overlapping_class:
+            return {
+                "success": False,
+                "message": f"Could not add schedule: this class overlaps with {overlapping_class}."
+            }
         conn.execute("""
             INSERT INTO schedules
             (user_id, class_name, building, day, start_time, end_time)
@@ -551,11 +597,34 @@ def get_user_schedule(user_id):
     cursor = conn.execute("""
         SELECT * FROM schedules
         WHERE user_id = ?
+        ORDER BY start_time ASC
     """, (user_id,))
 
     schedule = cursor.fetchall()
 
     conn.close()
+
+    return schedule
+
+# Get a user's classes for a specific day, sorted by time
+def get_user_schedule_by_day(user_id, day):
+    conn = get_connection()
+
+    cursor = conn.execute("""
+        SELECT * FROM schedules
+        WHERE user_id = ?
+        AND ('/' || REPLACE(day, ' ', '') || '/') LIKE
+            ('%/' || ? || '/%')
+        ORDER BY start_time ASC
+    """, (user_id, day.strip()))
+
+    schedule = cursor.fetchall()
+
+    conn.close()
+
+    # Check if no classes were found
+    if not schedule:
+        return f"There are no classes scheduled for {day}."
 
     return schedule
 
