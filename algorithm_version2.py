@@ -297,18 +297,9 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
         capacity = capacities[lot_id]
 
         # Estimate demand at this student's planned arrival.
-        demand = calculate_lot_demand(
-            plans,
-            lot_id,
-            day,
-            arrival_time,
-            capacity
-        )
+        demand = calculate_lot_demand(plans, lot_id, day, arrival_time, capacity)
 
-        score = calculate_recommendation_score(
-            result["total"],
-            demand
-        )
+        score = calculate_recommendation_score(result["total"], demand)
 
         # Recover the integer number of other planned cars.
         planned_occupied = round(demand * capacity)
@@ -386,16 +377,10 @@ def recommend_for_student(user_id, day=None):
     # index 6: end time string
 
     # Find the earliest starting class.
-    first_class = min(
-        classes,
-        key=lambda row: _parse_time(row[5])
-    )
+    first_class = [0]
 
     # Find the latest ending class.
-    last_class = max(
-        classes,
-        key=lambda row: _parse_time(row[6])
-    )
+    last_class = [-1]
 
     first_building = first_class[3]
     last_building = last_class[3]
@@ -460,7 +445,7 @@ if __name__ == "__main__":
 
     else:
         # Uses today's weekday and the REAL routing API.
-        recommendations = recommend_for_student(user_id)
+        recommendations = recommend_for_student(user_id, "Friday")
 
         # To test Friday regardless of today's date, replace
         # the line above with:
