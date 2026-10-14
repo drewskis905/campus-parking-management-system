@@ -382,11 +382,11 @@ def recommend_for_student(user_id, day=None):
     # Find the latest ending class.
     last_class = [-1]
 
-    first_building = first_class[3]
-    last_building = last_class[3]
+    first_building = classes[0][3]
+    last_building = classes[-1][3]
 
-    first_start = _parse_time(first_class[5])
-    last_end = _parse_time(last_class[6])
+    first_start = _parse_time(classes[0][5])
+    last_end = _parse_time(classes[-1][6])
 
     # Convert to datetime so we can subtract 15 minutes.
     first_class_datetime = datetime.combine(
@@ -403,11 +403,11 @@ def recommend_for_student(user_id, day=None):
     print(f"\nStudent ID: {user_id}")
     print(f"Selected day: {day}")
     print(
-        f"First class: {first_class[2]} "
+        f"First class: {classes[0][2]} "
         f"at {first_building}"
     )
     print(
-        f"Last class: {last_class[2]} "
+        f"Last class: {classes[-1][2]} "
         f"at {last_building}"
     )
     print(
@@ -445,7 +445,7 @@ if __name__ == "__main__":
 
     else:
         # Uses today's weekday and the REAL routing API.
-        recommendations = recommend_for_student(user_id, "Friday")
+        recommendations = recommend_for_student(user_id, "Monday")
 
         # To test Friday regardless of today's date, replace
         # the line above with:
