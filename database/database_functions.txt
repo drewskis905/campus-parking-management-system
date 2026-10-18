@@ -155,3 +155,21 @@ load_buildings()
 get_all(table, *columns)
 - Gets selected columns from the lots or buildings table.
 - Can return one column or multiple columns.
+
+seed_database()
+- Located in seed_database.py.
+- Creates 1,000 fake student accounts for testing.
+- Gives each student between 1 and 6 randomly generated classes.
+- Assigns random buildings, days, and class times.
+- Uses add_schedule() to prevent overlapping classes.
+- Uses a different random seed for each student so their schedule
+  stays the same when generated on a fresh database.
+- Checks if a student already exists before creating an account.
+- Skips students who already have schedules to avoid duplicates.
+- Does not generate parking plans because the algorithm handles those.
+
+How to use:
+- Run seed_database.py to generate the test students and schedules.
+- Test email example: student0001@test.com
+- Test password: ParkingTest123!
+- Change NUM_STUDENTS to control how many students are generated.
