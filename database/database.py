@@ -269,7 +269,7 @@ def get_all(table, *columns):
     return rows
 
 # Add a new registered user
-def add_user(first_name, last_name, email, password):
+def add_user(first_name, last_name, email, password, *, connection=None):
     # Check for any empty fields
     empty_fields = []
 
@@ -291,7 +291,7 @@ def add_user(first_name, last_name, email, password):
             "success": False,
             "message": f"Could not add user: empty field(s): {', '.join(empty_fields)}."
         }
-    conn = get_connection()
+    conn = connection if connection is not None else get_connection()
 
     try:
         # Hash the password before storing it
@@ -300,16 +300,18 @@ def add_user(first_name, last_name, email, password):
             bcrypt.gensalt()
         ).decode("utf-8")
 
-        conn.execute("""
+        cursor = conn.execute("""
             INSERT INTO users
             (first_name, last_name, email, password_hash)
             VALUES (?, ?, ?, ?)
         """, (first_name, last_name, email, password_hash))
 
-        conn.commit()
+        if connection is None:
+            conn.commit()
 
         return {
             "success": True,
+            "user_id": cursor.lastrowid,
             "message": "User added successfully."
         }
 
@@ -326,7 +328,8 @@ def add_user(first_name, last_name, email, password):
         }
 
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
 # Check if a user is already registered
 def is_registered(email):
@@ -462,8 +465,8 @@ def format_time(time_string):
 
 
 # Check if a new class overlaps with an existing class
-def check_schedule_overlap(user_id, day, start_time, end_time):
-    conn = get_connection()
+def check_schedule_overlap(user_id, day, start_time, end_time, *, connection=None):
+    conn = connection if connection is not None else get_connection()
 
     cursor = conn.execute("""
         SELECT class_name, day, start_time, end_time
@@ -472,7 +475,8 @@ def check_schedule_overlap(user_id, day, start_time, end_time):
     """, (user_id,))
 
     existing_classes = cursor.fetchall()
-    conn.close()
+    if connection is None:
+        conn.close()
 
     # Get the days for the new class
     new_days = set(d.strip() for d in day.split("/"))
@@ -494,7 +498,7 @@ def check_schedule_overlap(user_id, day, start_time, end_time):
     return None
 
 # Add a class to a user's schedule
-def add_schedule(user_id, class_name, building, day, start_time, end_time):
+def add_schedule(user_id, class_name, building, day, start_time, end_time, *, connection=None):
 
     # Check for any empty fields
     empty_fields = []
@@ -538,7 +542,7 @@ def add_schedule(user_id, class_name, building, day, start_time, end_time):
             "message": "Could not add schedule: invalid start or end time."
         }
 
-    conn = get_connection()
+    conn = connection if connection is not None else get_connection()
 
     try:
         # Check if this class is already in the user's schedule
@@ -560,7 +564,8 @@ def add_schedule(user_id, class_name, building, day, start_time, end_time):
             user_id,
             day,
             start_time,
-            end_time
+            end_time,
+            connection=conn,
         )
 
         if overlapping_class:
@@ -574,7 +579,8 @@ def add_schedule(user_id, class_name, building, day, start_time, end_time):
             VALUES (?, ?, ?, ?, ?, ?)
         """, (user_id, class_name, building, day, start_time, end_time))
 
-        conn.commit()
+        if connection is None:
+            conn.commit()
 
         return {
             "success": True,
@@ -588,7 +594,42 @@ def add_schedule(user_id, class_name, building, day, start_time, end_time):
         }
 
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
+
+
+def register_user(first_name, last_name, email, password, schedules):
+    """Save an account and all its classes together, or save nothing."""
+    conn = None
+    try:
+        conn = get_connection()
+        result = add_user(first_name, last_name, email, password, connection=conn)
+        if not result['success']:
+            conn.rollback()
+            if 'users.email' in result['message']:
+                return {'success': False, 'message': 'An account with this email already exists.'}
+            return result
+
+        user_id = result['user_id']
+        for index, schedule in enumerate(schedules, start=1):
+            if conn.execute('SELECT 1 FROM buildings WHERE name = ?',
+                            (schedule['building'],)).fetchone() is None:
+                conn.rollback()
+                return {'success': False, 'message': f'Class {index}: choose a listed building.'}
+            result = add_schedule(user_id, **schedule, connection=conn)
+            if not result['success']:
+                conn.rollback()
+                return {'success': False, 'message': f'Class {index}: {result["message"]}'}
+
+        conn.commit()
+        return {'success': True, 'user_id': user_id, 'message': 'Account created successfully.'}
+    except (sqlite3.Error, ValueError):
+        if conn is not None:
+            conn.rollback()
+        return {'success': False, 'message': 'Could not create your account. Please try again.'}
+    finally:
+        if conn is not None:
+            conn.close()
 
 # Get all classes for a specific user
 def get_user_schedule(user_id):
