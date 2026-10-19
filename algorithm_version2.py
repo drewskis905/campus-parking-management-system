@@ -435,7 +435,7 @@ if __name__ == "__main__":
 
     # This email belongs to a Friday student from the generated
     # batch. Change it to another email in your users table.
-    email = "student0001@test.com"
+    email = "pyramid.student001@example.test"
 
     # Retrieve the actual database ID, rather than guessing it.
     user_id = db.get_user_id(email)
@@ -445,7 +445,7 @@ if __name__ == "__main__":
 
     else:
         # Uses today's weekday and the REAL routing API.
-        recommendations = recommend_for_student(user_id)
+        recommendations = recommend_for_student(user_id, "Friday")
 
         # To test Friday regardless of today's date, replace
         # the line above with:
@@ -476,6 +476,8 @@ if __name__ == "__main__":
                     f"   Capacity: {result['capacity']}\n"
                     f"   Other planned cars at arrival: "
                     f"{result['planned_occupied']}\n"
-                    f"   Planned occupancy: "
-                    f"{result['percent_full']:.1f}%"
+                    f"   Percent Full at arrival: "
+                    f"{result['percent_full']:.1f}%\n"
+                    f"   Remaining spots at arrival: "
+                    f"{result['remaining_spots']}"
                 )

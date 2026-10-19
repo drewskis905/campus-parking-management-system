@@ -2,6 +2,7 @@
 from pathlib import Path
 from nicegui import app
 
+from frontend.config import get_storage_secret
 from frontend.styles.theme import install_theme
 
 
@@ -12,7 +13,8 @@ install_theme()
 
 # Importing page modules registers their NiceGUI routes.
 from frontend.pages import home as _home
+from frontend.pages import dashboard as _dashboard
 
 
 if __name__ in {'__main__', '__mp_main__'}:
-    ui.run(title='Campus Route')
+    ui.run(title='Campus Route', storage_secret=get_storage_secret())
