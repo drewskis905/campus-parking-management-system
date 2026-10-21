@@ -9,14 +9,22 @@ Usage:
 import json
 import os
 import requests
+from collections import OrderedDict
+from pathlib import Path
 
 
 # My API key for OpenRouteService (ORS) - you should replace this with your own key.
 API_KEY =  os.getenv("ORS_API_KEY") # <-- put your real OpenRouteService key here
 ORS_MATRIX_URL = "https://api.heigit.org/openrouteservice/v2/matrix/foot-walking"
 
-LOTS_FILE = "lots.json" # our lots file
-BUILDINGS_FILE = "buildings.json" # our buildings file
+BASE_DIR = Path(__file__).resolve().parent
+LOTS_FILE = BASE_DIR / "lots.json"
+BUILDINGS_FILE = BASE_DIR / "buildings.json"
+
+# Reuse successful walking matrices during bulk seeding. Demand is never cached.
+# Limit memory use and discard the cache when this Python process exits.
+_MATRIX_CACHE = OrderedDict()
+_MATRIX_CACHE_LIMIT = 128
 
 
 
@@ -68,6 +76,15 @@ def get_walk_time_matrix(origins, destinations):
     Returns a 2D list: durations[i][j] = minutes from origins[i] to destinations[j].
     Returns None if the API call fails.
     """
+    cache_key = (
+        ORS_MATRIX_URL,
+        tuple(tuple(point) for point in origins),
+        tuple(tuple(point) for point in destinations),
+    )
+    if cache_key in _MATRIX_CACHE:
+        _MATRIX_CACHE.move_to_end(cache_key)
+        return [list(row) for row in _MATRIX_CACHE[cache_key]]
+
     headers = { #API is expecting an Authorization header with the API key and JSON content type
         "Authorization": API_KEY,
         "Content-Type": "application/json" #content type we are feeding it
@@ -85,7 +102,7 @@ def get_walk_time_matrix(origins, destinations):
         "metrics": ["duration"]
     }
 
-    response = requests.post(ORS_MATRIX_URL, json=body, headers=headers)
+    response = requests.post(ORS_MATRIX_URL, json=body, headers=headers, timeout=30)
 
     if response.status_code != 200:
         print(f"[walk_time] API error: {response.status_code} - {response.text}")
@@ -97,6 +114,9 @@ def get_walk_time_matrix(origins, destinations):
         [d / 60 if d is not None else None for d in row]
         for row in durations_seconds
     ]
+    _MATRIX_CACHE[cache_key] = tuple(tuple(row) for row in durations_minutes)
+    if len(_MATRIX_CACHE) > _MATRIX_CACHE_LIMIT:
+        _MATRIX_CACHE.popitem(last=False)
     return durations_minutes
 
 
@@ -182,3 +202,4 @@ if __name__ == "__main__":
         print("\nTop 3:")
         for r in results[:3]:
             print(f"{r['lot']}: {r['total']:.1f} min total")
+
