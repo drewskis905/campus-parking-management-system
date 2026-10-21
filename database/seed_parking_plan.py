@@ -21,13 +21,11 @@ if __package__ is None or __package__ == "":
 from database import database as db
 from algorithm_version2 import check_database_exists, get_lot_recommendations
 
-
 def seed_parking_plan():
     check_database_exists()
-
     conn = db.get_connection()
     try:
-        users = conn.execute("SELECT id FROM users ORDER BY id").fetchall()
+        users = conn.execute("SELECT id FROM users ORDER BY id").fetchall() # stored as list of tuples
     finally:
         conn.close()
 
@@ -41,7 +39,12 @@ def seed_parking_plan():
         # A stored plan can cover multiple days, such as Monday/Wednesday.
         existing_days = set()
         for plan in db.get_user_parking_plans(user_id):
-            existing_days.update(day.strip() for day in plan[3].split("/"))
+            stored_days = plan[3]            # "Monday/Wednesday"
+            individual_days = stored_days.split("/")  # ["Monday", "Wednesday"]
+
+            for day in individual_days:
+                cleaned_day = day.strip()
+                existing_days.add(cleaned_day)
 
         for class_day in db.ClassDay:
             day = class_day.value
@@ -85,9 +88,7 @@ def seed_parking_plan():
 
             # Each returned option has an equal chance of being selected.
             selected_lot = random.choice(recommendations)["lot"]
-            result = db.add_parking_plan(
-                user_id, selected_lot, day, start_time, end_time
-            )
+            result = db.add_parking_plan(user_id, selected_lot, day, start_time, end_time)
 
             if not result["success"]:
                 raise RuntimeError(
@@ -96,12 +97,10 @@ def seed_parking_plan():
 
             plans_created += 1
             print(f"User {user_id}: {day} | {selected_lot} | {start_time}-{end_time}")
-
     print(f"New parking plans created: {plans_created}")
     print(f"Existing user/day plans skipped: {plans_skipped}")
     print(f"Days without reachable lots: {days_without_routes}")
     return plans_created
-
 
 if __name__ == "__main__":
     seed_parking_plan()
