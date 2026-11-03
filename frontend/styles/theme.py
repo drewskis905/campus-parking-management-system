@@ -90,6 +90,42 @@ GLOBAL_CSS = '''
         box-shadow: 0 18px 40px rgba(40, 40, 30, 0.10);
     }
 
+    .recommendation-options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        width: 100%;
+    }
+
+    .recommendation-option {
+        width: 100%;
+        min-height: 150px;
+        padding: 20px;
+        border: 2px solid #d7d7d2;
+        border-radius: 18px;
+        background: white !important;
+        color: #1d1d1b !important;
+        text-align: left;
+    }
+
+    .recommendation-option .q-btn__content {
+        width: 100%;
+        justify-content: flex-start;
+        white-space: pre-line;
+        line-height: 1.8;
+    }
+
+    .recommendation-option-selected {
+        border-color: #e89b00;
+        background: #fff6db !important;
+        box-shadow: 0 0 0 2px rgba(255, 173, 0, 0.15);
+    }
+
+    .recommendation-option:focus-visible {
+        outline: 2px solid #1d1d1b;
+        outline-offset: 3px;
+    }
+
     .auth-dialog-card {
         width: min(1100px, 96vw);
         max-width: none;

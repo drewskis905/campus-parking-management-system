@@ -14,12 +14,12 @@ from pathlib import Path
 
 # Support direct execution and python -m database.seed_parking_plan.
 # Replace the script directory so database.py does not shadow the package.
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if __package__ is None or __package__ == "":
-    sys.path[0] = str(PROJECT_ROOT)
+# PROJECT_ROOT = Path(__file__).resolve().parents[1]
+# if __package__ is None or __package__ == "":
+#     sys.path[0] = str(PROJECT_ROOT)
 
 from database import database as db
-from algorithm_version2 import check_database_exists, get_lot_recommendations
+from backend.algorithm_version2 import check_database_exists, get_lot_recommendations
 
 def seed_parking_plan():
     check_database_exists()

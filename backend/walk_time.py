@@ -8,15 +8,27 @@ Usage:
 
 import json
 import requests
-
+from pathlib import Path
 
 # My API key for OpenRouteService (ORS) - you should replace this with your own key.
 API_KEY =  "<your api key>" # <-- put your real OpenRouteService key here
 ORS_MATRIX_URL = "https://api.heigit.org/openrouteservice/v2/matrix/foot-walking"
 
-LOTS_FILE = "lots.json" # our lots file
-BUILDINGS_FILE = "buildings.json" # our buildings file
+# LOTS_FILE = "lots.json" # our lots file
+# BUILDINGS_FILE = "buildings.json" # our buildings file
 
+LOTS_FILE = str(
+    Path(__file__).resolve().parent.parent
+    / "database"
+    / "data"
+    / "lots.json"
+)
+BUILDINGS_FILE = str(
+    Path(__file__).resolve().parent.parent
+    / "database"
+    / "data"
+    / "buildings.json"
+)
 
 
 def load_lots(path=LOTS_FILE):

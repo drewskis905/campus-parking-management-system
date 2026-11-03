@@ -3,7 +3,9 @@ import sqlite3
 from nicegui import app, run, ui
 
 from database import database
+from frontend.components.campus_map import campus_map
 from frontend.components.navbar import navbar
+from frontend.components.parking_recommendations import ParkingRecommendations
 
 
 @ui.page('/dashboard')
@@ -16,6 +18,15 @@ async def dashboard_page() -> None:
 
     navbar()
     with ui.column().classes('w-full max-w-6xl mx-auto px-4 py-8 md:px-8 gap-6'):
+        # Map
+        with ui.column().classes(
+            'w-full p-0 gap-0 overflow-hidden rounded-2xl border border-gray-200 shadow-sm'
+        ):
+            campus_map(interactive=True, height=320)
+
+        # Pull parking recommendations for user
+        ParkingRecommendations(user_id)
+
         ui.label('My Schedule').classes('serif text-3xl font-bold')
 
         try:

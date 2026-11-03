@@ -18,7 +18,7 @@ from database import database as db
 #
 # It does not rename a database or edit database.py.
 db.DATABASE = str(
-    Path(__file__).resolve().parent
+    Path(__file__).resolve().parent.parent
     / "database"
     / "parking.db"
 )
@@ -272,7 +272,7 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
 
     # Import the existing routing function.
     # Importing does not run walk_time.py's guarded demo.
-    from walk_time import score_all_lots
+    from backend.walk_time import score_all_lots
 
     # This actually calls the routing API.
     #

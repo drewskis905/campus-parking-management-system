@@ -1,10 +1,18 @@
 import os
 import secrets
+from dataclasses import dataclass
 from pathlib import Path
 
 
 STORAGE_SECRET_FILE = Path(__file__).resolve().parent.parent / '.nicegui' / 'storage_secret'
 
+@dataclass(frozen=True)
+class CampusMapSettings:
+    latitude: float = 33.782
+    longitude: float = -118.112
+    zoom: int = 14
+
+CAMPUS_MAP_SETTINGS = CampusMapSettings()
 
 def get_storage_secret() -> str:
     """Use the configured secret, or persist a private key for local runs."""

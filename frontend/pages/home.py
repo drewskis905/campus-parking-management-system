@@ -1,5 +1,6 @@
 from nicegui import ui
 
+from frontend.components.campus_map import campus_map
 from frontend.components.navbar import navbar
 
 from database import database
@@ -34,14 +35,4 @@ def home_page() -> None:
             ).props('flat')
 
         with ui.column().classes('hero-card items-center justify-center mt-10'):
-            options = {
-                'zoomControl': False,
-                'scrollWheelZoom': False,
-                'doubleClickZoom': False,
-                'boxZoom': False,
-                'keyboard': False,
-                'dragging': False,
-            }
-            CSULB_LAT = 33.782
-            CSULB_LNG = -118.112
-            m = ui.leaflet(center=(CSULB_LAT, CSULB_LNG), zoom=14, options=options)
+            campus_map()
