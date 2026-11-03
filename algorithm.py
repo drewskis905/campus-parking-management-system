@@ -1,5 +1,5 @@
 from datetime import time, datetime, date
-from walk_time import score_all_lots
+from walk_time import score_all_lots, load_lots
 # from database.database import get_all_parking_plans, get_lot
 
 from fake_database import get_all_parking_plans, get_lot
