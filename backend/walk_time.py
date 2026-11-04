@@ -16,32 +16,14 @@ from pathlib import Path
 API_KEY = os.environ.get("ORS_API_KEY", "")
 ORS_MATRIX_URL = "https://api.heigit.org/openrouteservice/v2/matrix/foot-walking"
 
-<<<<<<< HEAD:backend/walk_time.py
-# LOTS_FILE = "lots.json" # our lots file
-# BUILDINGS_FILE = "buildings.json" # our buildings file
-=======
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-LOTS_FILE = os.path.join(SCRIPT_DIR, "database", "data", "lots.json")
-BUILDINGS_FILE = os.path.join(SCRIPT_DIR, "database", "data", "buildings.json")
+DATA_DIR = Path(__file__).resolve().parent.parent / "database" / "data"
+LOTS_FILE = str(DATA_DIR / "lots.json")
+BUILDINGS_FILE = str(DATA_DIR / "buildings.json")
 
 # Walk times between lots and buildings never change, so each building is fetched
 # from ORS once and saved here. The Matrix API allows 40 requests/min, 500/day.
-WALK_TIMES_FILE = os.path.join(SCRIPT_DIR, "database", "data", "walk_times.json")
+WALK_TIMES_FILE = str(DATA_DIR / "walk_times.json")
 SECONDS_BETWEEN_REQUESTS = 1.6  # keeps us under 40 requests per minute
->>>>>>> origin/testing-walk-time-and-algorithm:walk_time.py
-
-LOTS_FILE = str(
-    Path(__file__).resolve().parent.parent
-    / "database"
-    / "data"
-    / "lots.json"
-)
-BUILDINGS_FILE = str(
-    Path(__file__).resolve().parent.parent
-    / "database"
-    / "data"
-    / "buildings.json"
-)
 
 
 def load_lots(path=LOTS_FILE):
