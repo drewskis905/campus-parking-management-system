@@ -415,7 +415,9 @@ def recommend_for_student(user_id, day=None):
         f"{arrival_time.strftime('%I:%M %p')}"
     )
 
-    return get_lot_recommendations(
+
+    # Get the parking recommendations using the student's class schedule.
+    recommendations = get_lot_recommendations(
         first_class_name=first_building,
         last_class_name=last_building,
         day=day,
@@ -423,6 +425,17 @@ def recommend_for_student(user_id, day=None):
         departure_time=departure_time,
         exclude_student_id=user_id
     )
+
+    # Keep the existing error result if recommendations could not be calculated.
+    if recommendations is None:
+        return None
+
+    # Include the first building so we know where to draw the walking route.
+    for recommendation in recommendations:
+        recommendation["first_building"] = first_building
+
+    return recommendations
+
 
 
 # ============================================================

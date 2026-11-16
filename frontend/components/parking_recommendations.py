@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime
-
+from database import database
 from nicegui import run, ui
-
+from backend.walk_time import load_buildings
 from backend.algorithm_version2 import recommend_for_student
-
+# Get the actual walking path after the student confirms a parking lot.
+from backend.walking_route import get_walking_route
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +13,13 @@ logger = logging.getLogger(__name__)
 class ParkingRecommendations:
     """Display real recommendations; route updates and persistence are future work."""
 
-    def __init__(self, user_id: int) -> None:
+    def __init__(self, user_id: int, map_view) -> None:
         self.user_id = user_id
+        # Store the map so we can update it when a student selects a lot.
+        self.map_view = map_view
+        self.lot_marker = None
+        # Keep track of the walking route so we can remove it when needed.
+        self.route_line = None
         self.selected = None
         self.option_buttons = []
         self.recommendations = []
@@ -37,7 +43,7 @@ class ParkingRecommendations:
         with ui.dialog() as self.dialog, ui.card().classes('w-full max-w-md p-6 gap-4'):
             ui.label('Confirm parking selection').classes('serif text-2xl font-bold')
             self.confirmation_text = ui.label('')
-            ui.label('This preview does not save your parking choice yet.').classes(
+            ui.label('Your parking choice will be saved when you confirm.').classes(
                 'text-sm text-gray-500'
             )
             with ui.row().classes('w-full justify-end gap-2'):
@@ -95,7 +101,40 @@ class ParkingRecommendations:
         self.update_route_preview(self.selected)
 
     def update_route_preview(self, recommendation: dict) -> None:
-        """Stub: later draw lot → first class and last class → lot on the map."""
+        # Remove the old walking route when the student selects another lot.
+        # The new route will only appear after they confirm their selection.
+        if self.route_line is not None:
+            self.map_view.remove_layer(self.route_line)
+            self.route_line = None
+        # Find the parking lot the student selected.
+        lot_name = recommendation["lot"]
+        lots = database.get_all_lots()
+
+        selected_lot = next(
+            (lot for lot in lots if lot[1] == lot_name),
+            None
+        )
+
+        if selected_lot is None:
+            ui.notify('Parking lot location not found.', type='negative')
+            return
+
+        # Get the parking lot's coordinates from the database.
+        latitude = selected_lot[2]
+        longitude = selected_lot[3]
+
+        # Remove the previous marker before showing the new selection.
+        if self.lot_marker is not None:
+            self.map_view.remove_layer(self.lot_marker)
+            self.lot_marker = None
+
+        # Mark the selected parking lot on the map.
+        self.lot_marker = self.map_view.marker(
+            latlng=(latitude, longitude)
+        )
+
+        # Move the map to the selected parking lot.
+        self.map_view.set_center((latitude, longitude))
 
     def open_confirmation(self) -> None:
         if self.selected is None:
@@ -103,7 +142,141 @@ class ParkingRecommendations:
         self.confirmation_text.set_text(f'Choose {self.selected["lot"]} for today’s parking?')
         self.dialog.open()
 
-    def confirm_selection(self) -> None:
-        """Stub: close the preview dialog without writing a parking plan."""
+    def get_parking_times(self):
+
+        # Get today's day so we only look at classes scheduled for today.
+        day = datetime.now().strftime("%A")
+        schedule = database.get_user_schedule_by_day(self.user_id, day)
+
+        # Don't create a parking plan if the student has no classes today.
+        if isinstance(schedule, str) or not schedule:
+            return None
+
+        # Find the earliest class and latest class using their start and end times.
+        first_class = min(schedule, key=lambda row: row[5])
+        last_class = max(schedule, key=lambda row: row[6])
+
+        # Students should arrive 15 minutes before their first class.
+        from datetime import timedelta
+
+        first_start = datetime.strptime(first_class[5], "%H:%M")
+        arrival = first_start - timedelta(minutes=15)
+
+        # Students leave after their last class ends.
+        departure = datetime.strptime(last_class[6], "%H:%M")
+
+        return day, arrival.strftime("%H:%M"), departure.strftime("%H:%M")
+
+    async def confirm_selection(self) -> None:
+        if self.selected is None:
+            return
+
         self.dialog.close()
-        ui.notify('Preview only. Your parking choice has not been saved.', type='info')
+
+        # Get today's parking times from the student's class schedule.
+        parking_times = self.get_parking_times()
+
+        if parking_times is None:
+            ui.notify("No classes found for today.", type="negative")
+            return
+
+        day, start_time, end_time = parking_times
+
+        # Save the selected parking lot and times to the database.
+        # If a plan already exists for today, update it instead.
+        result = await run.io_bound(
+            database.save_parking_plan,
+            self.user_id,
+            self.selected["lot"],
+            day,
+            start_time,
+            end_time
+        )
+
+        # Stop if the database could not save the parking plan.
+        if not result["success"]:
+            ui.notify(result["message"], type="negative")
+            return
+
+        ui.notify(result["message"], type="positive")
+
+        # Find the selected parking lot in our database.
+        lot_name = self.selected["lot"]
+        lots = database.get_all_lots()
+
+        selected_lot = next(
+            (lot for lot in lots if lot[1] == lot_name),
+            None
+        )
+
+        if selected_lot is None:
+            ui.notify("Parking lot not found.", type="negative")
+            return
+
+        # Find the building for the student's first class.
+        building_name = self.selected["first_building"]
+        buildings = load_buildings()
+
+        selected_building = next(
+            (building for building in buildings
+             if building["name"] == building_name),
+            None
+        )
+
+        if selected_building is None:
+            ui.notify("Class building not found.", type="negative")
+            return
+
+        # Get the coordinates for the parking lot and classroom building.
+        lot_coords = (selected_lot[2], selected_lot[3])
+        building_coords = (
+            selected_building["lat"],
+            selected_building["lng"]
+        )
+
+        # Request the walking route without freezing the website.
+        ui.notify("Loading walking route...", type="info")
+
+        route = await run.io_bound(
+            get_walking_route,
+            lot_name,
+            building_name,
+            lot_coords,
+            building_coords
+        )
+
+        if route is None:
+            ui.notify("Could not load the walking route.", type="negative")
+            return
+
+        # Remove the previous route before drawing a new one.
+        if self.route_line is not None:
+            self.map_view.remove_layer(self.route_line)
+            self.route_line = None
+
+        # Convert the route coordinates into the order Leaflet expects.
+        route_points = [
+            (lat, lng)
+            for lng, lat in route["coordinates"]
+        ]
+
+        # Draw the actual walking path on the campus map.
+        self.route_line = self.map_view.generic_layer(
+            name="polyline",
+            args=[route_points, {"color": "blue", "weight": 5}]
+        )
+
+        # Move the map to the selected parking lot.
+        self.map_view.set_center(lot_coords)
+
+        # Show the estimated walking time and distance.
+        minutes = route["duration_minutes"]
+        distance = route["distance_meters"]
+
+        ui.notify(
+            f"Walking time: {minutes:.1f} minutes | "
+            f"Distance: {distance:.0f} meters",
+            type="positive",
+            timeout=8000
+        )
+

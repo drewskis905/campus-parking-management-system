@@ -22,10 +22,11 @@ async def dashboard_page() -> None:
         with ui.column().classes(
             'w-full p-0 gap-0 overflow-hidden rounded-2xl border border-gray-200 shadow-sm'
         ):
-            campus_map(interactive=True, height=320)
+            # Keep a reference to the map so parking recommendations can update it.
+            map_view = campus_map(interactive=True, height=320)
 
-        # Pull parking recommendations for user
-        ParkingRecommendations(user_id)
+        # Pass the map to the recommendations so selecting a lot can show its location.
+        ParkingRecommendations(user_id, map_view)
 
         ui.label('My Schedule').classes('serif text-3xl font-bold')
 

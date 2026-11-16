@@ -14,7 +14,7 @@ install_theme()
 # Importing page modules registers their NiceGUI routes.
 from frontend.pages import home as _home
 from frontend.pages import dashboard as _dashboard
-
+from frontend.pages import settings as _settings
 
 if __name__ in {'__main__', '__mp_main__'}:
     ui.run(title='Campus Route', storage_secret=get_storage_secret())

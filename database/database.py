@@ -631,6 +631,95 @@ def register_user(first_name, last_name, email, password, schedules):
         if conn is not None:
             conn.close()
 
+
+# Update one class without changing the rest of the student's schedule.
+def update_schedule(user_id, schedule_id, class_name, building,
+                    day, start_time, end_time):
+
+    # Make sure all the class information was entered.
+    if not all([class_name.strip(), building.strip(), day.strip(),
+                start_time.strip(), end_time.strip()]):
+        return {"success": False, "message": "Please fill in all fields."}
+
+    # Check that the selected days and class times are valid.
+    if not validate_class_day(day) or not validate_time(start_time, end_time):
+        return {"success": False, "message": "Invalid class days or times."}
+
+    with get_connection() as conn:
+
+        # Make sure this class belongs to the logged-in student.
+        existing = conn.execute(
+            "SELECT id FROM schedules WHERE id = ? AND user_id = ?",
+            (schedule_id, user_id)
+        ).fetchone()
+
+        if not existing:
+            return {"success": False, "message": "Class not found."}
+
+        # Make sure the building exists in our campus database.
+        building_exists = conn.execute(
+            "SELECT 1 FROM buildings WHERE name = ?", (building,)
+        ).fetchone()
+
+        if not building_exists:
+            return {"success": False, "message": "Choose a valid building."}
+
+        # Check other classes, but skip the class we're currently editing.
+        other_classes = conn.execute(
+            """SELECT class_name, day, start_time, end_time
+               FROM schedules
+               WHERE user_id = ? AND id != ?""",
+            (user_id, schedule_id)
+        ).fetchall()
+
+        new_days = set(d.strip() for d in day.split("/"))
+
+        for other_name, other_day, other_start, other_end in other_classes:
+            other_days = set(d.strip() for d in other_day.split("/"))
+
+            if new_days & other_days and start_time < other_end and end_time > other_start:
+                return {
+                    "success": False,
+                    "message": f"This class overlaps with {other_name}."
+                }
+
+        # Prevent two classes from having the same name.
+        duplicate = conn.execute(
+            """SELECT 1 FROM schedules
+               WHERE user_id = ? AND class_name = ? AND id != ?""",
+            (user_id, class_name, schedule_id)
+        ).fetchone()
+
+        if duplicate:
+            return {"success": False, "message": "This class already exists."}
+
+        # Save the updated class information.
+        conn.execute(
+            """UPDATE schedules
+               SET class_name = ?, building = ?, day = ?,
+                   start_time = ?, end_time = ?
+               WHERE id = ? AND user_id = ?""",
+            (class_name, building, day, start_time, end_time,
+             schedule_id, user_id)
+        )
+
+    return {"success": True, "message": "Class updated successfully."}
+
+
+# Delete only the selected class from the student's schedule.
+def delete_schedule(user_id, schedule_id):
+    with get_connection() as conn:
+        cursor = conn.execute(
+            "DELETE FROM schedules WHERE id = ? AND user_id = ?",
+            (schedule_id, user_id)
+        )
+
+        if cursor.rowcount == 0:
+            return {"success": False, "message": "Class not found."}
+
+    return {"success": True, "message": "Class deleted successfully."}
+
+
 # Get all classes for a specific user
 def get_user_schedule(user_id):
     conn = get_connection()
@@ -856,6 +945,59 @@ def update_parking_plan(plan_id, lot, day, start_time, end_time):
 
     finally:
         conn.close()
+
+
+
+# Save a student's parking plan for a specific day.
+# If they already have a plan for that day, replace it instead of adding another one.
+def save_parking_plan(user_id, lot, day, start_time, end_time):
+
+    # Check the information before saving anything to the database.
+    if user_id is None or not all([lot, day, start_time, end_time]):
+        return {"success": False, "message": "Missing parking plan information."}
+
+    if not validate_class_day(day) or "/" in day:
+        return {"success": False, "message": "Choose one valid day."}
+
+    if not validate_time(start_time, end_time):
+        return {"success": False, "message": "Invalid parking plan times."}
+
+    try:
+        with get_connection() as conn:
+
+            # Check whether this student already has a parking plan for this day.
+            existing_plan = conn.execute(
+                """SELECT id FROM parking_plans
+                   WHERE user_id = ? AND day = ?""",
+                (user_id, day)
+            ).fetchone()
+
+            if existing_plan:
+
+                # Update the existing plan so we don't count the same student twice.
+                conn.execute(
+                    """UPDATE parking_plans
+                       SET lot = ?, start_time = ?, end_time = ?
+                       WHERE user_id = ? AND day = ?""",
+                    (lot, start_time, end_time, user_id, day)
+                )
+                message = "Parking plan updated successfully."
+
+            else:
+
+                # Create a new plan if this student hasn't chosen a lot for this day.
+                conn.execute(
+                    """INSERT INTO parking_plans
+                       (user_id, lot, day, start_time, end_time)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (user_id, lot, day, start_time, end_time)
+                )
+                message = "Parking plan saved successfully."
+
+        return {"success": True, "message": message}
+
+    except sqlite3.Error as error:
+        return {"success": False, "message": f"Could not save parking plan: {error}"}
 
 
 if __name__ == "__main__":

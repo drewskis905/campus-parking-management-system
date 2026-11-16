@@ -37,6 +37,7 @@ def navbar() -> Callable[[str], None]:
         if signed_in:
             with ui.row().classes('items-center gap-4'):
                 ui.link('Dashboard', '/dashboard').classes('nav-link')
+                ui.link('Settings', '/settings').classes('nav-link')
                 ui.button('Logout', on_click=logout).classes(
                     'yellow-button'
                 ).props('unelevated')
