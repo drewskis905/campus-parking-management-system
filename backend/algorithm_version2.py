@@ -235,7 +235,7 @@ def calculate_lot_overlap(
 # RANK PARKING LOTS USING THE REAL ROUTING API
 # ============================================================
 
-def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time, departure_time, exclude_student_id=None):
+def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time, departure_time, exclude_student_id=None, prefer = "balanced"):
     """
     Return up to three lots, ordered from lowest to highest score.
 
@@ -299,7 +299,12 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
         # Estimate demand at this student's planned arrival.
         demand = calculate_lot_demand(plans, lot_id, day, arrival_time, capacity)
 
-        score = calculate_recommendation_score(result["total"], demand)
+        if prefer == "avaibility":
+            # a lower occupied fraction means more availability
+            score = demand 
+        else:
+            # keeps the exisiting balanced scoring formula
+            score = calculate_recommendation_score(result["total"], demand) 
 
         # Recover the integer number of other planned cars.
         planned_occupied = round(demand * capacity)
@@ -317,8 +322,11 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
             "percent_full": round(demand * 100, 1)
         })
 
-    # Sort by score: smallest first.
-    scores.sort(key=lambda result: result["score"])
+    if prefer == "availability":
+        # Compare occupied fractions first. Ties break by shorter total walk.
+        scores.sort(key = lambda result:(result["score"], result["walk_to"] + result["walk_from"]))
+    else:
+        scores.sort(key=lambda result: result["score"])
 
     # Return the best three, or fewer if fewer routes exist.
     return scores[:3]
@@ -415,6 +423,7 @@ def recommend_for_student(user_id, day=None):
         f"{arrival_time.strftime('%I:%M %p')}"
     )
 
+    prefer = db.get_user_parking_prefer(user_id) 
 
     # Get the parking recommendations using the student's class schedule.
     recommendations = get_lot_recommendations(
@@ -423,7 +432,8 @@ def recommend_for_student(user_id, day=None):
         day=day,
         arrival_time=arrival_time,
         departure_time=departure_time,
-        exclude_student_id=user_id
+        exclude_student_id=user_id,
+        prefer = prefer
     )
 
     # Keep the existing error result if recommendations could not be calculated.
