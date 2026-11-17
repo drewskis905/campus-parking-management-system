@@ -234,6 +234,8 @@ def calculate_lot_overlap(
 # ============================================================
 # RANK PARKING LOTS USING THE REAL ROUTING API
 # ============================================================
+FULL_LOT_PENALTY = 1000
+CAPACITY_GAP = 0.15 # 15 percent more full than other lot. Testing number
 
 def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time, departure_time, exclude_student_id=None, prefer = "balanced"):
     """
@@ -299,6 +301,8 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
         # Estimate demand at this student's planned arrival.
         demand = calculate_lot_demand(plans, lot_id, day, arrival_time, capacity)
 
+<<<<<<< HEAD
+=======
         if prefer == "availability":
             # a lower occupied fraction means more availability
             score = demand 
@@ -306,8 +310,27 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
             # keeps the exisiting balanced scoring formula
             score = calculate_recommendation_score(result["total"], demand) 
 
+>>>>>>> a13220ccb04357bd3191acc26e213a79be25cde7
         # Recover the integer number of other planned cars.
         planned_occupied = round(demand * capacity)
+        remaining_spots = max(0, capacity - planned_occupied)
+
+        if prefer == 'capacity':
+            # A lower occupied fraction means more availability.
+            score = demand
+
+        elif prefer == 'walk_time':
+            # Shortest total walk wins.
+            score = result["walk_to"] + result["walk_from"]
+
+        else:
+            # BALANCED: keeps the existing formula (walk minutes + busy penalty).
+            score = calculate_recommendation_score(result["total"], demand)
+
+        # A full lot is never a good recommendation, even for "closest".
+        # Skipped for capacity mode, which already ranks full lots last.
+        if prefer != 'capacity' and remaining_spots == 0:
+            score += FULL_LOT_PENALTY
 
         scores.append({
             "lot": lot_id,
@@ -318,13 +341,33 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
             "planned_occupied": planned_occupied,
 
             # These two values are based on plans only.
-            "remaining_spots": max(0, capacity - planned_occupied),
+            "remaining_spots": remaining_spots,
             "percent_full": round(demand * 100, 1)
         })
 
-    if prefer == "availability":
-        # Compare occupied fractions first. Ties break by shorter total walk.
-        scores.sort(key = lambda result:(result["score"], result["walk_to"] + result["walk_from"]))
+    if prefer == 'capacity':
+        # The emptiest lot sets the baseline.
+        best = min(lot["score"] for lot in scores)
+
+        def capacity_key(lot):
+            walk = lot["walk_to"] + lot["walk_from"]
+
+            # "Worse" = CAPACITY_GAP or more fuller than the best lot, or full.
+            worse = (lot["score"] - best >= CAPACITY_GAP) or lot["remaining_spots"] == 0
+
+            if worse:
+                # Behind every good-enough lot, emptier first.
+                return (1, lot["score"], walk)
+
+            # Good enough: ranked purely by walk time.
+            return (0, 0, walk)
+
+        scores.sort(key=capacity_key)
+
+
+    elif prefer == 'walk_time':
+        # Compare walk first. Ties break by the emptier lot.
+        scores.sort(key=lambda result: (result["score"], result["percent_full"]))
     else:
         scores.sort(key=lambda result: result["score"])
 
