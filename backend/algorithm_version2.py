@@ -301,16 +301,6 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
         # Estimate demand at this student's planned arrival.
         demand = calculate_lot_demand(plans, lot_id, day, arrival_time, capacity)
 
-<<<<<<< HEAD
-=======
-        if prefer == "availability":
-            # a lower occupied fraction means more availability
-            score = demand 
-        else:
-            # keeps the exisiting balanced scoring formula
-            score = calculate_recommendation_score(result["total"], demand) 
-
->>>>>>> a13220ccb04357bd3191acc26e213a79be25cde7
         # Recover the integer number of other planned cars.
         planned_occupied = round(demand * capacity)
         remaining_spots = max(0, capacity - planned_occupied)
@@ -466,8 +456,13 @@ def recommend_for_student(user_id, day=None):
         f"{arrival_time.strftime('%I:%M %p')}"
     )
 
-    prefer = db.get_user_parking_prefer(user_id) 
+    prefer = db.get_user_parking_prefer(user_id)
 
+    # Match the saved user preferences with the algorithm's preference names
+    if prefer == "availability":
+        prefer = "capacity"
+    elif prefer == "distance":
+        prefer = "walk_time"
     # Get the parking recommendations using the student's class schedule.
     recommendations = get_lot_recommendations(
         first_class_name=first_building,
