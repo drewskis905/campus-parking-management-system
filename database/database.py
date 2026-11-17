@@ -96,6 +96,16 @@ def create_tables():
         )
     """)
 
+    # Create a table to save each user's parking preferences
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_parking_preferences (
+            user_id INTEGER PRIMARY KEY,
+            preferred_lot TEXT,
+            priority TEXT NOT NULL DEFAULT 'balanced',
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -893,6 +903,30 @@ def get_user_parking_plans(user_id):
 
     return plans
 
+# Get the user's saved parking preference
+def get_user_parking_prefer(user_id):
+    conn = get_connection()
+
+    try:
+        # Find the parking priority saved by this user
+        cursor = conn.execute("""
+            SELECT priority
+            FROM user_parking_preferences
+            WHERE user_id = ?
+        """, (user_id,))
+
+        preference = cursor.fetchone()
+
+        # Use balanced if the user has not saved a preference
+        if preference is None:
+            return "balanced"
+
+        return preference[0]
+
+    finally:
+        conn.close()
+
+
 # Delete one specific parking plan
 def delete_parking_plan(plan_id):
     conn = get_connection()
@@ -1015,8 +1049,6 @@ if __name__ == "__main__":
     print("\nBuildings:")
     for building in get_all_buildings():
         print(building)
-
-
 
 
 

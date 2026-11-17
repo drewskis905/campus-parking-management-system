@@ -8,20 +8,6 @@ from database import database
 from frontend.components.navbar import navbar, logout
 
 
-# Create a table to save each student's parking preferences.
-# This keeps the preferences separate from the existing users table.
-def create_preferences_table():
-    with database.get_connection() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_parking_preferences (
-                user_id INTEGER PRIMARY KEY,
-                preferred_lot TEXT,
-                priority TEXT NOT NULL DEFAULT 'balanced',
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        """)
-
-
 # Get the student's account information and saved parking preferences.
 def load_settings(user_id):
     with database.get_connection() as conn:
@@ -52,7 +38,6 @@ async def settings_page():
 
     # Load the student's information and available parking lots.
     try:
-        await run.io_bound(create_preferences_table)
         user, preferences = await run.io_bound(load_settings, user_id)
         lots = await run.io_bound(database.get_all_lots)
     except sqlite3.Error:
