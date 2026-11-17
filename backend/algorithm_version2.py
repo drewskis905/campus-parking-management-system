@@ -299,7 +299,7 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
         # Estimate demand at this student's planned arrival.
         demand = calculate_lot_demand(plans, lot_id, day, arrival_time, capacity)
 
-        if prefer == "avaibility":
+        if prefer == "availability":
             # a lower occupied fraction means more availability
             score = demand 
         else:
