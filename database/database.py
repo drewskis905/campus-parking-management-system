@@ -419,6 +419,78 @@ def verify_password(email, password):
     finally:
         conn.close()
 
+# Permanently delete the student's account after verifying their password.
+def delete_account(user_id, password):
+    conn = get_connection()
+
+    try:
+        # Get the student's saved password hash.
+        user = conn.execute(
+            "SELECT password_hash FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+
+        if user is None:
+            return {
+                "success": False,
+                "message": "Account not found."
+            }
+
+        # Make sure the student entered their correct password.
+        password_hash = user[0]
+
+        if isinstance(password_hash, str):
+            password_hash = password_hash.encode('utf-8')
+
+        if not bcrypt.checkpw(
+            password.encode('utf-8'), password_hash
+        ):
+            return {
+                "success": False,
+                "message": "Incorrect password."
+            }
+
+        # Remove all information associated with the student's account.
+        conn.execute(
+            "DELETE FROM schedules WHERE user_id = ?",
+            (user_id,)
+        )
+
+        conn.execute(
+            "DELETE FROM parking_plans WHERE user_id = ?",
+            (user_id,)
+        )
+
+        conn.execute(
+            "DELETE FROM user_parking_preferences WHERE user_id = ?",
+            (user_id,)
+        )
+
+        # Delete the account after removing its saved information.
+        conn.execute(
+            "DELETE FROM users WHERE id = ?",
+            (user_id,)
+        )
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "Account deleted successfully."
+        }
+
+    except (sqlite3.Error, ValueError):
+        # Undo all changes if the account could not be deleted.
+        conn.rollback()
+
+        return {
+            "success": False,
+            "message": "Could not delete account. Please try again."
+        }
+
+    finally:
+        conn.close()
+
 # Delete a registered user
 def delete_user(email):
     conn = get_connection()
@@ -902,6 +974,48 @@ def get_user_parking_plans(user_id):
     conn.close()
 
     return plans
+
+# Save or update the student's selected parking preference.
+def save_parking_preference(user_id, priority, preferred_lot=None):
+    # Make sure the selected preference is valid.
+    if priority not in ('availability', 'distance', 'preferred_lot'):
+        return {
+            "success": False,
+            "message": "Invalid parking preference."
+        }
+
+    # Only save a parking lot when the student chooses that option.
+    if priority == 'preferred_lot':
+        if not preferred_lot:
+            return {
+                "success": False,
+                "message": "Please select a parking lot."
+            }
+    else:
+        preferred_lot = None
+
+    conn = get_connection()
+
+    try:
+        # Update the existing preference if the student already has one.
+        conn.execute("""
+            INSERT INTO user_parking_preferences
+                (user_id, preferred_lot, priority)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                preferred_lot = excluded.preferred_lot,
+                priority = excluded.priority
+        """, (user_id, preferred_lot, priority))
+
+        conn.commit()
+
+        return {
+            "success": True,
+            "message": "Parking preference saved successfully."
+        }
+
+    finally:
+        conn.close()
 
 # Get the user's saved parking preference
 def get_user_parking_prefer(user_id):

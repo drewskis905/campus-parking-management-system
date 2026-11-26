@@ -28,7 +28,15 @@ async def dashboard_page() -> None:
         # Pass the map to the recommendations so selecting a lot can show its location.
         ParkingRecommendations(user_id, map_view)
 
-        ui.label('My Schedule').classes('serif text-3xl font-bold')
+        # Let students access their schedule settings from the dashboard.
+        with ui.row().classes('w-full items-center justify-between'):
+            ui.label('My Schedule').classes('serif text-3xl font-bold')
+
+            ui.button(
+                'Edit Schedule',
+                icon='edit',
+                on_click=lambda: ui.navigate.to('/settings#class-schedule')
+            ).classes('yellow-button').props('no-caps unelevated')
 
         try:
             schedule = await run.io_bound(database.get_user_schedule, user_id)

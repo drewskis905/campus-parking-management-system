@@ -8,7 +8,7 @@ from database import database
 from frontend.components.navbar import navbar, logout
 
 
-# Get the student's account information and saved parking preferences.
+# Get the student's account information from the database.
 def load_settings(user_id):
     with database.get_connection() as conn:
         user = conn.execute(
@@ -16,14 +16,7 @@ def load_settings(user_id):
             (user_id,)
         ).fetchone()
 
-        preferences = conn.execute(
-            """SELECT preferred_lot, priority
-               FROM user_parking_preferences
-               WHERE user_id = ?""",
-            (user_id,)
-        ).fetchone()
-
-    return user, preferences
+    return user
 
 
 @ui.page('/settings')
@@ -36,10 +29,9 @@ async def settings_page():
         ui.navigate.to('/')
         return
 
-    # Load the student's information and available parking lots.
+    # Load the student's account information.
     try:
-        user, preferences = await run.io_bound(load_settings, user_id)
-        lots = await run.io_bound(database.get_all_lots)
+        user = await run.io_bound(load_settings, user_id)
     except sqlite3.Error:
         ui.label('Could not load settings. Please try again.')
         return
@@ -56,7 +48,7 @@ async def settings_page():
 
         ui.label('Settings').classes('serif text-4xl font-bold')
         ui.label(
-            'Manage your account and parking preferences.'
+            'Manage your account and class schedule.'
         ).classes('text-gray-600')
 
         # Let students update their name and email address.
@@ -224,292 +216,298 @@ async def settings_page():
                 'Change Password', on_click=change_password
             ).classes('yellow-button')
 
-        # Let students choose a parking lot and recommendation priority.
-        with ui.card().classes('w-full p-6 rounded-2xl gap-4'):
-            ui.label('Parking Preferences').classes(
-                'serif text-2xl font-bold'
-            )
-
-            # Use the parking lots already stored in our database.
-            lot_names = sorted({lot[1] for lot in lots})
-
-            lot_options = {'none': 'No preference'}
-            lot_options.update({name: name for name in lot_names})
-
-            saved_lot = preferences[0] if preferences else None
-            saved_priority = preferences[1] if preferences else 'balanced'
-
-            preferred_lot = ui.select(
-                lot_options,
-                label='Preferred Parking Lot',
-                value=saved_lot if saved_lot in lot_names else 'none'
-            ).classes('w-full').props('outlined')
-
+        # Let students manage their classes without going back to registration.
+        with ui.card().classes(
+                'w-full p-6 rounded-2xl gap-4'
+        ).props('id=class-schedule'):
+            ui.label('Class Schedule').classes('serif text-2xl font-bold')
             ui.label(
-                'What matters most when recommending a parking lot?'
-            ).classes('font-medium')
+                'Add, edit, or remove classes from your schedule.'
+            ).classes('text-gray-600')
 
-            # Balanced is the default when the student has not chosen yet.
-            priority = ui.radio(
-                {
-                    'balanced': 'Balanced (Recommended)',
-                    'availability': 'Parking Availability',
-                    'distance': 'Shorter Walking Distance'
-                },
-                value=saved_priority if saved_priority in (
-                    'balanced', 'availability', 'distance'
-                ) else 'balanced'
-            ).classes('w-full')
+            schedule_list = ui.column().classes('w-full gap-3')
 
-            async def save_preferences():
-                selected_lot = preferred_lot.value
-                selected_priority = priority.value
+            days = [
+                'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                'Friday', 'Saturday', 'Sunday'
+            ]
 
-                if selected_lot not in lot_options:
-                    ui.notify('Choose a valid parking lot.', type='negative')
-                    return
+            # Load building names from the existing database.
+            buildings = await run.io_bound(database.get_all_buildings)
+            building_names = sorted(building[1] for building in buildings)
 
-                if selected_priority not in (
-                    'balanced', 'availability', 'distance'
+            def open_class_form(existing=None):
+                editing = existing is not None
+
+                with ui.dialog() as dialog, ui.card().classes(
+                        'w-full max-w-lg p-6 gap-4'
                 ):
-                    ui.notify('Choose a valid priority.', type='negative')
-                    return
+                    ui.label(
+                        'Edit Class' if editing else 'Add Class'
+                    ).classes('text-2xl font-bold')
 
-                # Save new preferences or update the student's existing ones.
-                def update_preferences():
-                    with database.get_connection() as conn:
-                        conn.execute(
-                            """INSERT INTO user_parking_preferences
-                               (user_id, preferred_lot, priority)
-                               VALUES (?, ?, ?)
-                               ON CONFLICT(user_id) DO UPDATE SET
-                               preferred_lot = excluded.preferred_lot,
-                               priority = excluded.priority""",
-                            (
-                                user_id,
-                                None if selected_lot == 'none' else selected_lot,
-                                selected_priority
+                    class_name = ui.input(
+                        'Class Name',
+                        value=existing[2] if editing else ''
+                    ).classes('w-full')
+
+                    building = ui.select(
+                        building_names,
+                        label='Building',
+                        value=existing[3] if editing else None
+                    ).classes('w-full').props('outlined')
+
+                    # Allow multiple days for classes that meet more than once.
+                    selected_days = ui.select(
+                        days,
+                        label='Class Days',
+                        multiple=True,
+                        value=existing[4].split('/') if editing else []
+                    ).classes('w-full').props('outlined use-chips')
+
+                    ui.label('Use 24-hour time (example: 13:30 = 1:30 PM)').classes(
+                        'text-sm text-gray-600'
+                    )
+
+                    start_time = ui.input(
+                        'Start Time (HH:MM)',
+                        value=existing[5] if editing else ''
+                    ).classes('w-full')
+
+                    end_time = ui.input(
+                        'End Time (HH:MM)',
+                        value=existing[6] if editing else ''
+                    ).classes('w-full')
+
+                    async def save_class():
+                        name = (class_name.value or '').strip()
+                        chosen_building = building.value
+                        chosen_days = selected_days.value or []
+                        start = (start_time.value or '').strip()
+                        end = (end_time.value or '').strip()
+
+                        # Make sure the student entered all required information.
+                        if not all([
+                            name, chosen_building, chosen_days, start, end
+                        ]):
+                            ui.notify(
+                                'Please fill in all fields.',
+                                type='negative'
                             )
+                            return
+
+                        # Check the time format before sending it to the database.
+                        try:
+                            datetime.strptime(start, '%H:%M')
+                            datetime.strptime(end, '%H:%M')
+                        except ValueError:
+                            ui.notify(
+                                'Enter times as HH:MM, like 09:30 or 14:00.',
+                                type='negative'
+                            )
+                            return
+
+                        day_string = '/'.join(chosen_days)
+
+                        if editing:
+                            result = await run.io_bound(
+                                database.update_schedule,
+                                user_id, existing[0], name, chosen_building,
+                                day_string, start, end
+                            )
+                        else:
+                            result = await run.io_bound(
+                                database.add_schedule,
+                                user_id, name, chosen_building,
+                                day_string, start, end
+                            )
+
+                        if result['success']:
+                            ui.notify(result['message'], type='positive')
+                            dialog.close()
+                            await refresh_schedule()
+                        else:
+                            ui.notify(result['message'], type='negative')
+
+                    with ui.row().classes('w-full justify-end gap-2'):
+                        ui.button('Cancel', on_click=dialog.close).props(
+                            'flat'
+                        )
+                        ui.button(
+                            'Save Class', on_click=save_class
+                        ).classes('yellow-button')
+
+                dialog.open()
+
+            def confirm_delete(schedule):
+                with ui.dialog() as dialog, ui.card().classes('p-6 gap-4'):
+                    ui.label('Delete Class?').classes('text-xl font-bold')
+                    ui.label(
+                        f'Are you sure you want to remove {schedule[2]}?'
+                    )
+
+                    async def remove_class():
+                        result = await run.io_bound(
+                            database.delete_schedule,
+                            user_id, schedule[0]
                         )
 
-                try:
-                    await run.io_bound(update_preferences)
-                    ui.notify(
-                        'Parking preferences saved!',
-                        type='positive'
-                    )
-                except sqlite3.Error:
-                    ui.notify(
-                        'Could not save preferences.',
-                        type='negative'
-                    )
+                        if result['success']:
+                            dialog.close()
+                            ui.notify(result['message'], type='positive')
+                            await refresh_schedule()
+                        else:
+                            ui.notify(result['message'], type='negative')
 
+                    with ui.row().classes('justify-end gap-2'):
+                        ui.button('Cancel', on_click=dialog.close).props(
+                            'flat'
+                        )
+                        ui.button(
+                            'Delete', on_click=remove_class
+                        ).props('color=negative')
+
+                dialog.open()
+
+            async def refresh_schedule():
+                # Reload classes so the page shows changes right after saving.
+                current_schedule = await run.io_bound(
+                    database.get_user_schedule, user_id
+                )
+
+                schedule_list.clear()
+
+                with schedule_list:
+                    if not current_schedule:
+                        ui.label('No classes added yet.').classes(
+                            'text-gray-600'
+                        )
+
+                    for schedule in current_schedule:
+                        with ui.card().classes(
+                                'w-full p-4 rounded-xl'
+                        ):
+                            ui.label(schedule[2]).classes(
+                                'font-bold text-lg'
+                            )
+                            ui.label(f'Building: {schedule[3]}')
+                            ui.label(
+                                f'Days: {schedule[4].replace("/", ", ")}'
+                            )
+                            ui.label(
+                                f'Time: {database.format_time(schedule[5])}'
+                                f' - {database.format_time(schedule[6])}'
+                            )
+
+                            with ui.row().classes('gap-2'):
+                                ui.button(
+                                    'Edit',
+                                    on_click=lambda s=schedule: open_class_form(s)
+                                ).props('outline')
+
+                                ui.button(
+                                    'Delete',
+                                    on_click=lambda s=schedule: confirm_delete(s)
+                                ).props('flat color=negative')
             ui.button(
-                'Save Preferences', on_click=save_preferences
+                'Add Class',
+                on_click=lambda: open_class_form()
             ).classes('yellow-button')
 
-            # Let students manage their classes without going back to registration.
-            with ui.card().classes('w-full p-6 rounded-2xl gap-4'):
-                ui.label('Class Schedule').classes('serif text-2xl font-bold')
+            await refresh_schedule()
+
+        # Let students confirm before permanently deleting their account.
+        def open_delete_account():
+            with ui.dialog() as dialog, ui.card().classes(
+                    'w-full max-w-lg p-6 gap-4'
+            ):
+                ui.label('Delete Your Account?').classes(
+                    'serif text-2xl font-bold text-red-600'
+                )
+
                 ui.label(
-                    'Add, edit, or remove classes from your schedule.'
-                ).classes('text-gray-600')
+                    'Are you sure you want to permanently delete '
+                    'your Campus Route account?'
+                )
 
-                schedule_list = ui.column().classes('w-full gap-3')
+                ui.label('All your saved information will be deleted, including:')
 
-                days = [
-                    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-                    'Friday', 'Saturday', 'Sunday'
-                ]
+                ui.label('• Personal account information')
+                ui.label('• Class schedules')
+                ui.label('• Parking plans')
+                ui.label('• Parking preferences')
 
-                # Load building names from the existing database.
-                buildings = await run.io_bound(database.get_all_buildings)
-                building_names = sorted(building[1] for building in buildings)
+                ui.label(
+                    'This action is permanent and cannot be undone.'
+                ).classes('text-red-600 font-bold')
 
-                def open_class_form(existing=None):
-                    editing = existing is not None
+                # Require the current password to confirm account deletion.
+                password = ui.input(
+                    'Enter your password to confirm',
+                    password=True,
+                    password_toggle_button=True
+                ).classes('w-full').props('outlined')
 
-                    with ui.dialog() as dialog, ui.card().classes(
-                            'w-full max-w-lg p-6 gap-4'
-                    ):
-                        ui.label(
-                            'Edit Class' if editing else 'Add Class'
-                        ).classes('text-2xl font-bold')
+                async def confirm_delete_account():
+                    # Make sure the student entered their password.
+                    if not password.value:
+                        ui.notify(
+                            'Please enter your password.',
+                            type='negative'
+                        )
+                        return
 
-                        class_name = ui.input(
-                            'Class Name',
-                            value=existing[2] if editing else ''
-                        ).classes('w-full')
+                    # Make sure the student is still signed in.
+                    if app.storage.user.get('user_id') != user_id:
+                        logout()
+                        return
 
-                        building = ui.select(
-                            building_names,
-                            label='Building',
-                            value=existing[3] if editing else None
-                        ).classes('w-full').props('outlined')
+                    delete_button.disable()
 
-                        # Allow multiple days for classes that meet more than once.
-                        selected_days = ui.select(
-                            days,
-                            label='Class Days',
-                            multiple=True,
-                            value=existing[4].split('/') if editing else []
-                        ).classes('w-full').props('outlined use-chips')
-
-                        ui.label('Use 24-hour time (example: 13:30 = 1:30 PM)').classes(
-                            'text-sm text-gray-600'
+                    # Verify the password and delete the account.
+                    try:
+                        result = await run.io_bound(
+                            database.delete_account,
+                            user_id,
+                            password.value
                         )
 
-                        start_time = ui.input(
-                            'Start Time (HH:MM)',
-                            value=existing[5] if editing else ''
-                        ).classes('w-full')
+                        if not result['success']:
+                            ui.notify(result['message'], type='negative')
+                            return
 
-                        end_time = ui.input(
-                            'End Time (HH:MM)',
-                            value=existing[6] if editing else ''
-                        ).classes('w-full')
+                        ui.notify(result['message'], type='positive')
+                        dialog.close()
 
-                        async def save_class():
-                            name = (class_name.value or '').strip()
-                            chosen_building = building.value
-                            chosen_days = selected_days.value or []
-                            start = (start_time.value or '').strip()
-                            end = (end_time.value or '').strip()
+                        # Log the student out after deleting their account.
+                        logout()
 
-                            # Make sure the student entered all required information.
-                            if not all([
-                                name, chosen_building, chosen_days, start, end
-                            ]):
-                                ui.notify(
-                                    'Please fill in all fields.',
-                                    type='negative'
-                                )
-                                return
+                    finally:
+                        delete_button.enable()
 
-                            # Check the time format before sending it to the database.
-                            try:
-                                datetime.strptime(start, '%H:%M')
-                                datetime.strptime(end, '%H:%M')
-                            except ValueError:
-                                ui.notify(
-                                    'Enter times as HH:MM, like 09:30 or 14:00.',
-                                    type='negative'
-                                )
-                                return
+                with ui.row().classes('w-full justify-end gap-2'):
+                    ui.button(
+                        'Cancel', on_click=dialog.close
+                    ).props('flat no-caps')
 
-                            day_string = '/'.join(chosen_days)
+                    delete_button = ui.button(
+                        'Delete Account',
+                        on_click=confirm_delete_account
+                    ).props('color=negative no-caps unelevated')
 
-                            if editing:
-                                result = await run.io_bound(
-                                    database.update_schedule,
-                                    user_id, existing[0], name, chosen_building,
-                                    day_string, start, end
-                                )
-                            else:
-                                result = await run.io_bound(
-                                    database.add_schedule,
-                                    user_id, name, chosen_building,
-                                    day_string, start, end
-                                )
+            dialog.open()
 
-                            if result['success']:
-                                ui.notify(result['message'], type='positive')
-                                dialog.close()
-                                await refresh_schedule()
-                            else:
-                                ui.notify(result['message'], type='negative')
-
-                        with ui.row().classes('w-full justify-end gap-2'):
-                            ui.button('Cancel', on_click=dialog.close).props(
-                                'flat'
-                            )
-                            ui.button(
-                                'Save Class', on_click=save_class
-                            ).classes('yellow-button')
-
-                    dialog.open()
-
-                def confirm_delete(schedule):
-                    with ui.dialog() as dialog, ui.card().classes('p-6 gap-4'):
-                        ui.label('Delete Class?').classes('text-xl font-bold')
-                        ui.label(
-                            f'Are you sure you want to remove {schedule[2]}?'
-                        )
-
-                        async def remove_class():
-                            result = await run.io_bound(
-                                database.delete_schedule,
-                                user_id, schedule[0]
-                            )
-
-                            if result['success']:
-                                dialog.close()
-                                ui.notify(result['message'], type='positive')
-                                await refresh_schedule()
-                            else:
-                                ui.notify(result['message'], type='negative')
-
-                        with ui.row().classes('justify-end gap-2'):
-                            ui.button('Cancel', on_click=dialog.close).props(
-                                'flat'
-                            )
-                            ui.button(
-                                'Delete', on_click=remove_class
-                            ).props('color=negative')
-
-                    dialog.open()
-
-                async def refresh_schedule():
-                    # Reload classes so the page shows changes right after saving.
-                    current_schedule = await run.io_bound(
-                        database.get_user_schedule, user_id
-                    )
-
-                    schedule_list.clear()
-
-                    with schedule_list:
-                        if not current_schedule:
-                            ui.label('No classes added yet.').classes(
-                                'text-gray-600'
-                            )
-
-                        for schedule in current_schedule:
-                            with ui.card().classes(
-                                    'w-full p-4 rounded-xl'
-                            ):
-                                ui.label(schedule[2]).classes(
-                                    'font-bold text-lg'
-                                )
-                                ui.label(f'Building: {schedule[3]}')
-                                ui.label(
-                                    f'Days: {schedule[4].replace("/", ", ")}'
-                                )
-                                ui.label(
-                                    f'Time: {database.format_time(schedule[5])}'
-                                    f' - {database.format_time(schedule[6])}'
-                                )
-
-                                with ui.row().classes('gap-2'):
-                                    ui.button(
-                                        'Edit',
-                                        on_click=lambda s=schedule: open_class_form(s)
-                                    ).props('outline')
-
-                                    ui.button(
-                                        'Delete',
-                                        on_click=lambda s=schedule: confirm_delete(s)
-                                    ).props('flat color=negative')
-                ui.button(
-                    'Add Class',
-                    on_click=lambda: open_class_form()
-                ).classes('yellow-button')
-
-                await refresh_schedule()
-
-        # Reuse the logout function already used by the navigation bar.
+        # Give students the option to log out or delete their account.
         with ui.card().classes('w-full p-6 rounded-2xl gap-3'):
             ui.label('Account').classes('serif text-2xl font-bold')
 
-            ui.button(
-                'Logout', on_click=logout
-            ).classes('outline-button')
+            with ui.row().classes('w-full items-center gap-3'):
+                ui.button(
+                    'Logout', on_click=logout
+                ).classes('outline-button')
+
+                ui.button(
+                    'Delete Account',
+                    icon='delete_outline',
+                    on_click=open_delete_account
+                ).props('outline color=negative no-caps')

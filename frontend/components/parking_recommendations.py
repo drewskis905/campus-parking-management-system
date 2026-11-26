@@ -62,21 +62,82 @@ class ParkingRecommendations:
                 self.show_status('Parking recommendations are unavailable. Please try again later.', error=True)
                 return
             self.recommendations = results[:3]
+            # Keep the personalized recommendation separate from the top three.
+            self.personalized_recommendation = (
+                results[3] if len(results) > 3 else None
+            )
             if not self.recommendations:
                 self.show_status('No parking recommendations for today. You may have no classes scheduled.')
                 return
             with self.options:
+                # Separate system recommendations from personalized parking.
+                with ui.column().classes('recommended-heading gap-0'):
+                    ui.label('Recommended Parking Lots').classes(
+                        'text-lg font-bold'
+                    )
+                    ui.label('Top 3 recommendations based on your schedule').classes(
+                        'text-sm text-gray-500'
+                    )
+
+                with ui.column().classes('personalized-heading gap-0'):
+                    ui.label('Personalized Parking').classes(
+                        'text-lg font-bold'
+                    )
+                    ui.label('Based on your preference').classes(
+                        'text-sm text-gray-500'
+                    )
+
                 for index, result in enumerate(self.recommendations):
                     label = (
                         f'{index + 1}. {result["lot"]}\n'
+                        f'Parking available: {100 - result["percent_full"]:.1f}%\n'
                         f'To first class: {result["walk_to"]:.1f} min\n'
                         f'Back to parking: {result["walk_from"]:.1f} min\n'
-                        f'Score: {result["score"]:.2f}'
+                        f'Total time: {result["walk_to"] + result["walk_from"]:.1f} min'
                     )
                     button = ui.button(
                         label, on_click=lambda index=index: self.select(index)
                     ).classes('recommendation-option').props('no-caps unelevated aria-pressed=false')
                     self.option_buttons.append(button)
+                # Show the personalized recommendation if a preference is saved.
+                if self.personalized_recommendation is not None:
+                    result = self.personalized_recommendation
+
+                    preference_label = (
+                        f'{result["label"]}\n'
+                        f'{result["lot"]}\n'
+                        f'Parking available: {100 - result["percent_full"]:.1f}%\n'
+                        f'To first class: {result["walk_to"]:.1f} min\n'
+                        f'Back to parking: {result["walk_from"]:.1f} min\n'
+                        f'Total time: {result["walk_to"] + result["walk_from"]:.1f} min\n'
+                    )
+
+                    preference_icon = None
+
+                else:
+                    preference_label = 'Parking Preference\nClick to Personalize'
+                    preference_icon = 'add_circle_outline'
+
+                self.preference_button = ui.button(
+                    preference_label,
+                    icon=preference_icon,
+                    color=None,
+                    on_click=self.select_personalized
+                ).classes(
+                    'recommendation-option preference-option'
+                ).props('no-caps unelevated').style(
+                    'background-color: #111111 !important;'
+                    'color: #FFFFFF !important;'
+                    'border: 2px solid #5595CC !important;'
+                )
+                # Allow students to change their preference separately.
+                ui.button(
+                    'Change Preference',
+                    icon='settings',
+                    on_click=self.open_preferences
+                ).classes(
+                    'change-preference-button'
+                ).props('no-caps outline')
             self.select(0)
         except Exception:
             logger.exception('Could not load parking recommendations')
@@ -84,12 +145,143 @@ class ParkingRecommendations:
         finally:
             self.loading.set_visibility(False)
 
+    async def refresh_personalized(self):
+        # Check if the personalized option is currently selected.
+        was_selected = (
+            self.personalized_recommendation is not None
+            and self.selected is self.personalized_recommendation
+        )
+        # Get the updated recommendation after the preference changes.
+        results = await run.io_bound(
+            recommend_for_student, self.user_id
+        )
+
+        if not results or len(results) < 4:
+            self.personalized_recommendation = None
+            self.preference_button.set_text(
+                'Parking Preference\nNo matching recommendation\nClick to change'
+            )
+            self.preference_button.set_icon('add_circle_outline')
+
+            # Select a standard recommendation if personalized parking is unavailable.
+            if was_selected:
+                self.select(0)
+
+            return
+
+        # Update only the personalized recommendation.
+        self.personalized_recommendation = results[3]
+        result = self.personalized_recommendation
+
+        preference_label = (
+            f'{result["label"]}\n'
+            f'{result["lot"]}\n'
+            f'Parking available: {100 - result["percent_full"]:.1f}%\n'
+            f'To first class: {result["walk_to"]:.1f} min\n'
+            f'Back to parking: {result["walk_from"]:.1f} min\n'
+            f'Total time: {result["walk_to"] + result["walk_from"]:.1f} min\n'
+        )
+
+        # Replace the button information without refreshing the page.
+        self.preference_button.set_text(preference_label)
+        self.preference_button.set_icon(None)
+        # Update the selected lot and map if personalized parking was selected.
+        if was_selected:
+            await self.select_personalized()
+
+    async def open_preferences(self):
+        # Load all parking lots so students can choose their preferred lot.
+        lots = await run.io_bound(database.get_all_lots)
+        lot_names = sorted(lot[1] for lot in lots)
+
+        with ui.dialog() as dialog, ui.card().classes(
+                'w-full max-w-lg p-6 gap-4'
+        ):
+            ui.label('Parking Preferences').classes(
+                'serif text-2xl font-bold'
+            )
+
+            ui.label(
+                'Choose what matters most to you when finding parking.'
+            ).classes('text-gray-600')
+
+            # Allow students to select only one parking preference.
+            preference = ui.radio({
+                'availability': 'Parking Availability',
+                'distance': 'Shorter Walking Distance',
+                'preferred_lot': 'Preferred Parking Lot'
+            }).classes('w-full')
+
+            # Only show the parking lot dropdown when needed.
+            preferred_lot = ui.select(
+                lot_names,
+                label='Select your preferred parking lot'
+            ).classes('w-full').props('outlined')
+
+            preferred_lot.set_visibility(False)
+
+            preference.on_value_change(
+                lambda e: preferred_lot.set_visibility(
+                    e.value == 'preferred_lot'
+                )
+            )
+
+            async def confirm_preference():
+                # Make sure the student selected a preference.
+                if preference.value is None:
+                    ui.notify(
+                        'Please select a parking preference.',
+                        type='negative'
+                    )
+                    return
+
+                # Require a parking lot when this option is selected.
+                if preference.value == 'preferred_lot' and not preferred_lot.value:
+                    ui.notify(
+                        'Please select a parking lot.',
+                        type='negative'
+                    )
+                    return
+
+                # Save the student's preference so it can be used later.
+                result = await run.io_bound(
+                    database.save_parking_preference,
+                    self.user_id,
+                    preference.value,
+                    preferred_lot.value
+                )
+
+                # Only close the popup if the preference was saved.
+                if not result['success']:
+                    ui.notify(result['message'], type='negative')
+                    return
+
+                ui.notify(result['message'], type='positive')
+                dialog.close()
+
+                await self.refresh_personalized()
+
+            with ui.row().classes('w-full justify-end gap-2'):
+                ui.button(
+                    'Cancel', on_click=dialog.close
+                ).props('flat')
+
+                ui.button(
+                    'Confirm Preference',
+                    on_click=confirm_preference
+                ).classes('yellow-button').props('unelevated')
+        dialog.open()
+
     def show_status(self, message: str, *, error: bool = False) -> None:
         self.status.set_text(message)
         self.status.props(f'role={"alert" if error else "status"}')
         self.status.set_visibility(True)
 
     def select(self, index: int) -> None:
+        # Remove the personalized highlight when another lot is selected.
+        self.preference_button.classes(
+            remove='preference-option-selected'
+        )
         self.selected = self.recommendations[index]
         for button_index, button in enumerate(self.option_buttons):
             selected = button_index == index
@@ -97,6 +289,28 @@ class ParkingRecommendations:
                 add='recommendation-option-selected' if selected else '',
                 remove='' if selected else 'recommendation-option-selected',
             ).props(f'aria-pressed={str(selected).lower()}')
+        self.accept.enable()
+        self.update_route_preview(self.selected)
+
+    async def select_personalized(self):
+        # Open the preferences if the student has no recommendation yet.
+        if self.personalized_recommendation is None:
+            await self.open_preferences()
+            return
+
+        # Select the personalized lot instead of the original three.
+        self.selected = self.personalized_recommendation
+
+        for button in self.option_buttons:
+            button.classes(
+                remove='recommendation-option-selected'
+            ).props('aria-pressed=false')
+
+        # Highlight the personalized option and enable confirmation.
+        self.preference_button.classes(
+            add='preference-option-selected'
+        )
+
         self.accept.enable()
         self.update_route_preview(self.selected)
 

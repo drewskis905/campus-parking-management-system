@@ -25,7 +25,10 @@ def navbar() -> Callable[[str], None]:
         'site-header w-full items-center justify-between px-4 md:px-8 py-4 '
         'border-b border-gray-100'
     ):
-        with ui.row().classes('items-center gap-3'):
+        # Allow users to return to the homepage by clicking the logo.
+        with ui.row().classes('items-center gap-3 cursor-pointer').on(
+                'click', lambda: ui.navigate.to('/')
+        ):
             ui.icon('explore', color='#ffad00').classes('text-3xl')
             ui.label('Campus Route').classes('serif text-xl font-bold')
 

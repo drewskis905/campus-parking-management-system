@@ -92,11 +92,47 @@ GLOBAL_CSS = '''
 
     .recommendation-options {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 16px;
         width: 100%;
     }
 
+    .change-preference-button {
+        grid-column: 4;
+        width: 100%;
+        color: #5595CC;
+        border-radius: 10px;
+    }
+
+    .recommendation-options .preference-option-selected {
+        border-color: #FFC72C !important;
+        box-shadow: 0 0 0 2px #FFC72C;
+    }
+
+    .recommended-heading {
+        grid-column: span 3;
+    }
+
+    .personalized-heading {
+        grid-column: span 1;
+    }
+
+    .preference-option .q-btn__content {
+        flex-direction: column;
+        justify-content: center;
+        gap: 12px;
+    }
+
+    .preference-option .q-icon {
+        color: #5595CC;
+        font-size: 36px;
+        margin: 0 !important;
+    }
+
+    .recommendation-options .recommendation-option.preference-option:hover {
+        border-color: #7BB5E5 !important;
+    }
+    
     .recommendation-option {
         width: 100%;
         min-height: 150px;
@@ -109,10 +145,11 @@ GLOBAL_CSS = '''
     }
 
     .recommendation-option .q-btn__content {
-        width: 100%;
-        justify-content: flex-start;
-        white-space: pre-line;
-        line-height: 1.8;
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    white-space: pre-line;
+    line-height: 1.8;
     }
 
     .recommendation-option-selected {
