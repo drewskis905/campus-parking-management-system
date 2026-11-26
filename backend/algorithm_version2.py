@@ -241,6 +241,24 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
     """
     Return up to three lots, ordered from lowest to highest score.
 
+    Returns None if score_all_lots() reports failure.
+    """
+    ranked = get_all_ranked_lots(
+        first_class_name, last_class_name, day, arrival_time,
+        departure_time, exclude_student_id, prefer
+    )
+
+    if ranked is None:
+        return None
+
+    # Return the best three, or fewer if fewer routes exist.
+    return ranked[:3]
+
+
+def get_all_ranked_lots(first_class_name, last_class_name, day, arrival_time, departure_time, exclude_student_id=None, prefer = "balanced"):
+    """
+    Return EVERY reachable lot, ordered from lowest to highest score.
+
     Sources:
     - Parking plans: parking_test.db
     - Capacities: parking_test.db
@@ -248,6 +266,28 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
     - Walking durations: OpenRouteService API
 
     Returns None if score_all_lots() reports failure.
+    """
+    walk_results, plans, capacities = _load_scoring_inputs(
+        first_class_name, last_class_name, arrival_time,
+        departure_time, exclude_student_id
+    )
+
+    if walk_results is None:
+        return None
+
+    return rank_lots(walk_results, plans, capacities, day, arrival_time, prefer)
+
+
+def _load_scoring_inputs(first_class_name, last_class_name, arrival_time, departure_time, exclude_student_id=None):
+    """
+    Gather everything rank_lots() needs.
+
+    This is the slow part (it calls the routing API), so
+    recommend_for_student() calls it ONCE and then ranks the
+    same results in more than one way.
+
+    Returns (walk_results, plans, capacities).
+    walk_results is None if score_all_lots() reports failure.
     """
     if departure_time < arrival_time:
         raise ValueError(
@@ -282,9 +322,17 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
     # "lot", "walk_to", "walk_from", and "total".
     walk_results = score_all_lots(first_class_name, last_class_name)
 
-    if walk_results is None:
-        return None
+    return walk_results, plans, capacities
 
+
+def rank_lots(walk_results, plans, capacities, day, arrival_time, prefer="balanced"):
+    """
+    Score and sort every lot in walk_results using one preference:
+    "balanced", "capacity", or "walk_time".
+
+    Returns a NEW list of dictionaries, so calling this more than
+    once on the same walk_results is safe.
+    """
     scores = []
 
     for result in walk_results:
@@ -361,8 +409,73 @@ def get_lot_recommendations(first_class_name, last_class_name, day, arrival_time
     else:
         scores.sort(key=lambda result: result["score"])
 
-    # Return the best three, or fewer if fewer routes exist.
-    return scores[:3]
+    return scores
+
+
+# The 4th recommendation box. Maps the priority saved on the
+# settings page to the label shown on the dashboard.
+PRIORITY_LABELS = {
+    "availability": "Most parking availability",
+    "distance": "Shortest walk",
+    "preferred_lot": "Your preferred lot",
+}
+
+
+def get_user_priority_and_lot(user_id):
+    """
+    Return (priority, preferred_lot) from user_parking_preferences.
+
+    Reads the table directly so this file does not depend on
+    new functions in database.py. Returns (None, None) if the
+    user has not saved preferences.
+    """
+    check_database_exists()
+    conn = db.get_connection()
+
+    try:
+        row = conn.execute(
+            "SELECT priority, preferred_lot FROM user_parking_preferences WHERE user_id = ?",
+            (user_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row is None:
+        return None, None
+
+    return row[0], row[1]
+
+
+def pick_priority_lot(walk_results, plans, capacities, day, arrival_time, balanced, priority, preferred_lot):
+    """
+    Choose the lot for the 4th box, based on the student's priority.
+
+    The returned lot is copied from the BALANCED ranking, so its score
+    can be compared with the other three boxes.
+
+    It may be the same lot as one of the top three. That is
+    intentional: it shows the lot that best matches the priority.
+
+    Returns None if no lot fits (for example, the preferred lot
+    has no walking route).
+    """
+    if priority == "preferred_lot":
+        lot_name = preferred_lot
+
+    elif priority == "distance":
+        ranked = rank_lots(walk_results, plans, capacities, day, arrival_time, "walk_time")
+        lot_name = ranked[0]["lot"] if ranked else None
+
+    else:
+        # "availability"
+        ranked = rank_lots(walk_results, plans, capacities, day, arrival_time, "capacity")
+        lot_name = ranked[0]["lot"] if ranked else None
+
+    for lot in balanced:
+        if lot["lot"] == lot_name:
+            return dict(lot)
+
+    return None
 
 
 # ============================================================
@@ -456,27 +569,39 @@ def recommend_for_student(user_id, day=None):
         f"{arrival_time.strftime('%I:%M %p')}"
     )
 
-    prefer = db.get_user_parking_prefer(user_id)
+    priority, preferred_lot = get_user_priority_and_lot(user_id)
 
-    # Match the saved user preferences with the algorithm's preference names
-    if prefer == "availability":
-        prefer = "capacity"
-    elif prefer == "distance":
-        prefer = "walk_time"
-    # Get the parking recommendations using the student's class schedule.
-    recommendations = get_lot_recommendations(
-        first_class_name=first_building,
-        last_class_name=last_building,
-        day=day,
-        arrival_time=arrival_time,
-        departure_time=departure_time,
-        exclude_student_id=user_id,
-        prefer = prefer
+    # Call the routing API once, then rank the results two ways.
+    walk_results, plans, capacities = _load_scoring_inputs(
+        first_building, last_building, arrival_time,
+        departure_time, exclude_student_id=user_id
     )
 
     # Keep the existing error result if recommendations could not be calculated.
-    if recommendations is None:
+    if walk_results is None:
         return None
+
+    # Boxes 1-3: always the balanced ranking.
+    balanced = rank_lots(walk_results, plans, capacities, day, arrival_time, "balanced")
+    recommendations = balanced[:3]
+
+    for recommendation in recommendations:
+        recommendation["label"] = "Balanced"
+
+    # Box 4: the student's own priority from the settings page.
+    # If nothing is saved (or the old "balanced" value is saved),
+    # leave it out so the dashboard shows "Click to personalize".
+    priority_lot = None
+
+    if priority in PRIORITY_LABELS:
+        priority_lot = pick_priority_lot(
+            walk_results, plans, capacities, day, arrival_time,
+            balanced, priority, preferred_lot
+        )
+
+    if priority_lot is not None:
+        priority_lot["label"] = PRIORITY_LABELS[priority]
+        recommendations.append(priority_lot)
 
     # Include the first building so we know where to draw the walking route.
     for recommendation in recommendations:
